@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NMCL UI Preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --lime:     #a3e635;
+            --lime-bg:  rgba(163,230,53,0.08);
+            --lime-bdr: rgba(163,230,53,0.28);
+            --rust:     #ea580c;
+            --amber:    #f59e0b;
+            --dark:     #0a0d09;
+            --panel:    #0f1410;
+            --mid:      #182014;
+            --sidebar:  #0c0f0b;
+            --stroke:   #243020;
+            --muted:    #4a6040;
+            --text:     #b8c8a0;
+            --sb-w:     56px;
+            --sb-exp:   168px;
+            --font-px:  'Press Start 2P', monospace;
+            --font-m:   'JetBrains Mono', monospace;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-m);
+            background: var(--dark);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* 扫描线 — position:fixed + pointer-events:none，不影响任何布局 */
+        .scanlines {
+            position: fixed; inset: 0;
+            background: repeating-linear-gradient(
+                to bottom, transparent 0px, transparent 3px,
+                rgba(0,0,0,0.08) 3px, rgba(0,0,0,0.08) 4px
+            );
+            pointer-events: none;
+            z-index: 9000;
+            will-change: auto; /* 不需要提升，固定不动 */
+        }
+
+        /* ══ SIDEBAR ══ */
+        .sidebar {
+            width: var(--sb-w);
+            background: var(--sidebar);
+            border-right: 1px solid var(--stroke);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            position: relative;
+            z-index: 200;
+            flex-shrink: 0;
+            overflow: hidden;
+            /* 只在 sidebar 宽度变化时 transition，不影响面板 */
+            transition: width 0.28s cubic-bezier(0.4,0,0.2,1);
+        }
+
+        .sidebar.expanded { width: var(--sb-exp); }
+
+        .sb-brand {
+            width: 100%; height: 48px;
+            display: flex; align-items: center;
+            border-bottom: 1px solid var(--stroke);
+            padding: 0 0 0 18px; gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .sb-brand-icon {
+            font-family: var(--font-px);
+            font-size: 0.42rem; color: var(--lime);
+            line-height: 1.5; flex-shrink: 0;
+        }
+
+        .sb-brand-label {
+            font-family: var(--font-m);
+            font-size: 0.58rem; color: var(--muted);
+            letter-spacing: 0.1em; white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s 0.1s;
+        }
+
+        .sidebar.expanded .sb-brand-label { opacity: 1; }
+
+        .nav-list {
+            width: 100%; display: flex;
+            flex-direction: column; padding: 10px 0; flex: 1;
+        }
+
+        .nav-item {
+            width: 100%; height: 44px;
+            display: flex; align-items: center;
+            padding: 0 0 0 16px; gap: 12px;
+            cursor: pointer; color: var(--muted);
+            border-left: 2px solid transparent;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+            flex-shrink: 0;
+        }
+
+        .nav-item:hover  { color: var(--text); background: var(--mid); }
+        .nav-item.active { color: var(--lime); border-left-color: var(--lime); background: var(--lime-bg); }
+        .nav-item svg    { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
+
+        .nav-label {
+            font-family: var(--font-m);
+            font-size: 0.62rem; letter-spacing: 0.1em;
+            white-space: nowrap; opacity: 0;
+            transform: translateX(-6px);
+            transition: opacity 0.2s 0.08s, transform 0.2s 0.08s;
+        }
+
+        .sidebar.expanded .nav-label { opacity: 1; transform: none; }
+
+        .sb-ver {
+            width: 100%; padding: 6px 0 8px 17px;
+            font-family: var(--font-px); font-size: 0.3rem;
+            color: var(--stroke); line-height: 1.8; flex-shrink: 0;
+        }
+
+        .sb-toggle {
+            width: 100%; height: 40px;
+            display: flex; align-items: center;
+            padding: 0 0 0 17px; gap: 11px;
+            cursor: pointer; color: var(--stroke);
+            border-top: 1px solid var(--stroke);
+            transition: color 0.15s, background 0.15s; flex-shrink: 0;
+        }
+
+        .sb-toggle:hover { color: var(--muted); background: var(--mid); }
+
+        .sb-toggle-icon {
+            width: 18px; height: 18px; flex-shrink: 0;
+            transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+        }
+
+        .sidebar.expanded .sb-toggle-icon { transform: rotate(180deg); }
+
+        .sb-toggle-label {
+            font-family: var(--font-m); font-size: 0.55rem;
+            letter-spacing: 0.1em; white-space: nowrap;
+            opacity: 0; transition: opacity 0.2s 0.08s;
+        }
+
+        .sidebar.expanded .sb-toggle-label { opacity: 1; }
+
+        /* ══ MAIN ══ */
+        .main-content {
+            flex: 1; position: relative; overflow: hidden;
+            background: radial-gradient(ellipse at 70% 30%, rgba(24,32,20,0.55) 0%, transparent 60%), var(--dark);
+        }
+
+        /* 斜纹背景 — 静态，用 ::before 避免额外 DOM */
+        .main-content::before {
+            content: ''; position: absolute; inset: 0;
+            background: repeating-linear-gradient(
+                60deg, var(--stroke) 0, var(--stroke) 1px, transparent 1px, transparent 22px
+            );
+            opacity: 0.18; pointer-events: none;
+        }
+
+        .watermark {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: var(--font-px);
+            font-size: clamp(1.6rem, 4.5vw, 3rem);
+            color: var(--stroke); text-align: center;
+            line-height: 1.8; pointer-events: none; opacity: 0.45;
+        }
+
+        .watermark-sub {
+            display: block; font-family: var(--font-m);
+            font-size: clamp(0.38rem, 0.9vw, 0.6rem);
+            color: var(--muted); opacity: 0.5;
+            letter-spacing: 0.28em; margin-top: 0.5rem;
+        }
+
+        /* ══════════════════════════════════════════
+           FLOAT PANEL
+           关键：left/top 确定「停靠位置」，
+           拖拽时用 transform:translate() 做位移，
+           松手再 commit 回 left/top，transform 归零。
+           这样拖拽全程不触发 layout reflow。
+        ══════════════════════════════════════════ */
+        .float-panel {
+            position: absolute;
+            /* left/top 是停靠坐标，由 JS 写入 */
+            background: var(--panel);
+            border: 1px solid var(--stroke);
+            display: none; flex-direction: column;
+            z-index: 500;
+            box-shadow: 0 20px 56px rgba(0,0,0,0.55);
+            /* 只有动画类 .animating 才启用 transition，正常状态无 transition */
+            will-change: transform;
+            overflow: hidden;
+        }
+
+        .float-panel.visible { display: flex; }
+        .float-panel.on-top  { z-index: 600; }
+
+        /* 顶角发光 — 伪元素，静态，不影响性能 */
+        .float-panel::before {
+            content: ''; position: absolute; inset: -1px;
+            background: linear-gradient(
+                135deg,
+                rgba(163,230,53,0.13) 0%, transparent 35%,
+                transparent 65%, rgba(234,88,12,0.07) 100%
+            );
+            pointer-events: none; z-index: -1;
+        }
+
+        /* 动画类：仅在 maximize/minimize toggle 时挂上，动画完移除 */
+        .float-panel.animating {
+            transition:
+                left   0.26s cubic-bezier(0.4,0,0.2,1),
+                top    0.26s cubic-bezier(0.4,0,0.2,1),
+                width  0.26s cubic-bezier(0.4,0,0.2,1),
+                height 0.26s cubic-bezier(0.4,0,0.2,1);
+        }
+
+        /* 打开入场动画 */
+        @keyframes panelIn {
+            from { opacity: 0; transform: translateY(10px) scale(0.97); }
+            to   { opacity: 1; transform: none; }
+        }
+
+        .float-panel.minimized .panel-body,
+        .float-panel.minimized .resize-handle { display: none !important; }
+
+        .float-panel.minimized { height: auto !important; min-height: 0; }
+
+        /* ── panel bar ── */
+        .panel-bar {
+            height: 38px; padding: 0 10px 0 12px;
+            border-bottom: 1px solid var(--stroke);
+            background: var(--mid);
+            display: flex; align-items: center; gap: 7px;
+            cursor: grab; flex-shrink: 0; z-index: 2;
+        }
+
+        .panel-bar:active { cursor: grabbing; }
+
+        /* ── 交通灯 ── */
+        .tl-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+        .tl {
+            width: 11px; height: 11px; border-radius: 50%;
+            cursor: pointer; flex-shrink: 0; position: relative;
+            transition: filter 0.12s, transform 0.1s;
+        }
+
+        .tl:hover  { filter: brightness(1.3); transform: scale(1.15); }
+        .tl:active { transform: scale(0.88); }
+
+        .tl.red    { background: #ef4444; box-shadow: 0 0 5px rgba(239,68,68,0.5); }
+        .tl.yellow { background: #f59e0b; box-shadow: 0 0 5px rgba(245,158,11,0.5); }
+        .tl.green  { background: var(--lime); box-shadow: 0 0 5px rgba(163,230,53,0.5); }
+
+        .tl::after {
+            content: ''; position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 7px; font-weight: 900;
+            color: rgba(0,0,0,0.5); opacity: 0;
+            transition: opacity 0.12s;
+            line-height: 11px; text-align: center;
+        }
+
+        .tl-wrap:hover .tl.red::after    { opacity: 1; content: '✕'; }
+        .tl-wrap:hover .tl.yellow::after { opacity: 1; content: '−'; }
+        .tl-wrap:hover .tl.green::after  { opacity: 1; content: '⤢'; font-size: 6px; }
+
+        .panel-title {
+            font-family: var(--font-m); font-size: 0.57rem;
+            color: var(--muted); letter-spacing: 0.1em;
+            flex: 1; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+
+        /* ── panel body ── */
+        .panel-body { padding: 1.4rem; overflow-y: auto; flex: 1; min-height: 0; }
+
+        /* ══ RESIZE HANDLES ══ */
+        .resize-handle { position: absolute; z-index: 10; }
+
+        .resize-handle.n  { top: 0;    left: 8px;  right: 8px;  height: 5px; cursor: n-resize; }
+        .resize-handle.s  { bottom: 0; left: 8px;  right: 8px;  height: 5px; cursor: s-resize; }
+        .resize-handle.e  { right: 0;  top: 8px;   bottom: 8px; width: 5px;  cursor: e-resize; }
+        .resize-handle.w  { left: 0;   top: 8px;   bottom: 8px; width: 5px;  cursor: w-resize; }
+        .resize-handle.ne { top: 0;    right: 0;   width: 12px; height: 12px; cursor: ne-resize; }
+        .resize-handle.nw { top: 0;    left: 0;    width: 12px; height: 12px; cursor: nw-resize; }
+        .resize-handle.se { bottom: 0; right: 0;   width: 12px; height: 12px; cursor: se-resize; }
+        .resize-handle.sw { bottom: 0; left: 0;    width: 12px; height: 12px; cursor: sw-resize; }
+
+        /* 角落像素装饰 */
+        .resize-handle.se::after, .resize-handle.sw::after,
+        .resize-handle.ne::after, .resize-handle.nw::after {
+            content: ''; position: absolute;
+            width: 5px; height: 5px;
+            border-color: var(--muted); border-style: solid; opacity: 0.35;
+        }
+
+        .resize-handle.se::after { bottom: 2px; right: 2px; border-width: 0 1px 1px 0; }
+        .resize-handle.sw::after { bottom: 2px; left: 2px;  border-width: 0 0 1px 1px; }
+        .resize-handle.ne::after { top: 2px;    right: 2px; border-width: 1px 1px 0 0; }
+        .resize-handle.nw::after { top: 2px;    left: 2px;  border-width: 1px 0 0 1px; }
+
+        /* ══ FORM ══ */
+        .form-group { margin-bottom: 1.3rem; }
+
+        .flabel {
+            display: flex; align-items: center; gap: 0.4rem;
+            font-family: var(--font-m); font-size: 0.56rem;
+            color: var(--muted); margin-bottom: 0.5rem;
+            letter-spacing: 0.15em; text-transform: uppercase;
+        }
+
+        .flabel::before { content: '//'; color: var(--stroke); }
+
+        .input-wrapper {
+            position: relative; background: var(--dark);
+            border: 1px solid var(--stroke);
+            transition: border-color 0.2s;
+        }
+
+        .input-wrapper:focus-within { border-color: var(--lime-bdr); }
+
+        .input-wrapper::after {
+            content: '▼'; font-size: 9px; color: var(--muted);
+            position: absolute; right: 12px; top: 50%;
+            transform: translateY(-50%); pointer-events: none;
+        }
+
+        .input-wrapper.text-input::after { content: none; }
+
+        input[type="text"], select {
+            width: 100%; background: transparent; border: none;
+            color: var(--text); padding: 0.65rem 1rem;
+            font-size: 0.78rem; font-family: var(--font-m);
+            outline: none; letter-spacing: 0.05em;
+        }
+
+        select { appearance: none; cursor: pointer; }
+        option { background: #1a2318; color: var(--text); }
+
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; margin-top: 4px; }
+
+        input[type=range]::-webkit-slider-runnable-track { height: 3px; background: var(--stroke); }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 13px; height: 13px;
+            border-radius: 0; background: var(--lime); cursor: pointer;
+            margin-top: -5px; transition: transform 0.1s;
+            clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 3px, 100% 100%, 3px 100%, 0 calc(100% - 3px));
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+        .mem-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        #memValue { font-family: var(--font-m); font-size: 0.63rem; color: var(--lime); font-weight: 700; }
+
+        /* ── Launch button ── */
+        #launchBtn {
+            width: 100%; padding: 0.9rem; border: none;
+            background: var(--lime); color: var(--dark);
+            font-family: var(--font-px); font-size: 0.5rem;
+            letter-spacing: 0.08em; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+            transition: filter 0.12s, transform 0.08s; position: relative;
+        }
+
+        #launchBtn::after {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+        }
+
+        #launchBtn:hover:not(:disabled) { filter: brightness(1.1); transform: translate(-1px,-1px); }
+        #launchBtn:active:not(:disabled) { transform: none; }
+
+        #launchBtn:disabled {
+            background: var(--mid); color: var(--muted);
+            cursor: not-allowed; clip-path: none;
+            border: 1px solid var(--stroke);
+        }
+
+        .status-msg {
+            margin-top: 0.9rem; font-family: var(--font-m);
+            font-size: 0.63rem; color: var(--muted);
+            min-height: 18px; display: flex; align-items: center; gap: 0.5rem;
+        }
+
+        .status-msg::before { content: '$'; color: var(--lime); flex-shrink: 0; }
+
+        .user-placeholder { text-align: center; padding: 2rem 1rem; }
+        .user-placeholder-title { font-family: var(--font-px); font-size: 0.55rem; color: var(--muted); margin-bottom: 0.8rem; line-height: 1.8; }
+        .user-placeholder-sub   { font-family: var(--font-m); font-size: 0.62rem; color: var(--stroke); letter-spacing: 0.15em; }
+
+        /* ══ JAVA MODAL ══ */
+        .modal {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+            justify-content: center; align-items: center; z-index: 9000;
+        }
+
+        .modal-content {
+            background: var(--panel); border: 1px solid var(--stroke);
+            width: 360px; position: relative;
+        }
+
+        .modal-content::before {
+            content: ''; position: absolute; inset: -1px;
+            background: linear-gradient(135deg, rgba(234,88,12,0.18) 0%, transparent 40%);
+            z-index: -1;
+        }
+
+        .modal-header {
+            padding: 0.5rem 1rem; border-bottom: 1px solid var(--stroke);
+            background: rgba(234,88,12,0.07);
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+
+        .modal-header-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rust); }
+        .modal-title { font-family: var(--font-m); font-size: 0.6rem; color: var(--rust); letter-spacing: 0.1em; }
+        .modal-body-wrap { padding: 1.3rem; }
+        .modal-body { font-family: var(--font-m); font-size: 0.68rem; color: var(--muted); margin-bottom: 1rem; line-height: 2; }
+        .modal-body b { color: var(--text); font-weight: 400; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 1.1rem; }
+
+        .modal-btn {
+            flex: 1; padding: 0.65rem; border: none;
+            font-family: var(--font-m); font-size: 0.63rem;
+            letter-spacing: 0.08em; cursor: pointer;
+            transition: filter 0.12s, background 0.12s;
+        }
+
+        .btn-primary {
+            background: var(--lime); color: var(--dark); font-weight: 700;
+            clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px));
+        }
+
+        .btn-primary:hover { filter: brightness(1.08); }
+        .btn-secondary { background: transparent; border: 1px solid var(--stroke); color: var(--muted); }
+        .btn-secondary:hover { border-color: var(--muted); color: var(--text); }
+
+        .java-prog-row { display: flex; justify-content: space-between; margin-bottom: 0.45rem; }
+        #javaStatusText { font-family: var(--font-m); font-size: 0.6rem; color: var(--muted); }
+        #javaPercent    { font-family: var(--font-px); font-size: 0.45rem; color: var(--lime); }
+        .progress-bar   { height: 3px; background: var(--stroke); overflow: hidden; }
+        .progress-fill  { height: 100%; background: var(--lime); width: 0%; transition: width 0.3s; }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--dark); }
+        ::-webkit-scrollbar-thumb { background: var(--stroke); }
+    </style>
+</head>
+<body>
+<div class="scanlines"></div>
+
+<!-- ════ SIDEBAR ════ -->
+<div class="sidebar" id="sidebar">
+    <div class="sb-brand">
+        <span class="sb-brand-icon">NM<br>CL</span>
+        <span class="sb-brand-label">Net MC 启动器</span>
+    </div>
+
+    <div class="nav-list">
+        <div class="nav-item" id="nav-play"     onclick="togglePanel('play')"     title="启动游戏">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <span class="nav-label">启动</span>
+        </div>
+        <div class="nav-item" id="nav-settings" onclick="togglePanel('settings')" title="设置">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            <span class="nav-label">设置</span>
+        </div>
+        <div class="nav-item" id="nav-user"     onclick="togglePanel('user')"     title="用户">
+            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            <span class="nav-label">用户</span>
+        </div>
+    </div>
+
+    <div class="sb-ver">Alpha 0.1</div>
+
+    <div class="sb-toggle" onclick="toggleSidebar()" title="展开/收起">
+        <svg class="sb-toggle-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+        </svg>
+        <span class="sb-toggle-label">收起</span>
+    </div>
+</div>
+
+<!-- ════ MAIN CANVAS ════ -->
+<div class="main-content" id="mainContent">
+    <div class="watermark">
+        NMCL
+        <span class="watermark-sub">// Net Minecraft Launcher — Alpha 0.1</span>
+    </div>
+
+    <!-- ── 启动面板 ── -->
+    <div class="float-panel" id="panel-play" style="left:80px;top:80px;width:380px;height:260px;">
+        <div class="panel-bar">
+            <div class="tl-wrap">
+                <div class="tl red"    onclick="closePanel('play')"    title="关闭"></div>
+                <div class="tl yellow" onclick="minimizePanel('play')" title="最小化/恢复"></div>
+                <div class="tl green"  onclick="maximizePanel('play')" title="全屏/恢复"></div>
+            </div>
+            <span class="panel-title">nmcl — 启动游戏</span>
+        </div>
+        <div class="panel-body">
+            <div class="form-group">
+                <label class="flabel">游戏版本</label>
+                <div class="input-wrapper">
+                    <select id="versionSelect"><option>正在加载版本...</option></select>
+                </div>
+            </div>
+            <button id="launchBtn" onclick="launchGame()">
+                <svg style="width:15px;height:15px;fill:currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                启动游戏
+            </button>
+            <div id="statusMsg" class="status-msg">准备就绪</div>
+        </div>
+        <div class="resize-handle n"  data-dir="n"></div>
+        <div class="resize-handle s"  data-dir="s"></div>
+        <div class="resize-handle e"  data-dir="e"></div>
+        <div class="resize-handle w"  data-dir="w"></div>
+        <div class="resize-handle ne" data-dir="ne"></div>
+        <div class="resize-handle nw" data-dir="nw"></div>
+        <div class="resize-handle se" data-dir="se"></div>
+        <div class="resize-handle sw" data-dir="sw"></div>
+    </div>
+
+    <!-- ── 设置面板 ── -->
+    <div class="float-panel" id="panel-settings" style="left:30px;top:150px;width:380px;height:260px;">
+        <div class="panel-bar">
+            <div class="tl-wrap">
+                <div class="tl red"    onclick="closePanel('settings')"    title="关闭"></div>
+                <div class="tl yellow" onclick="minimizePanel('settings')" title="最小化/恢复"></div>
+                <div class="tl green"  onclick="maximizePanel('settings')" title="全屏/恢复"></div>
+            </div>
+            <span class="panel-title">nmcl — 设置</span>
+        </div>
+        <div class="panel-body">
+            <div class="form-group">
+                <label class="flabel">离线用户名</label>
+                <div class="input-wrapper text-input">
+                    <input type="text" id="username" value="Steve" placeholder="输入你的用户名">
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="mem-row">
+                    <label class="flabel" style="margin:0">内存分配</label>
+                    <span id="memValue">2048 MB</span>
+                </div>
+                <input type="range" id="memory" min="1024" max="8192" value="2048" step="128"
+                       oninput="document.getElementById('memValue').innerText=this.value+' MB'">
+            </div>
+        </div>
+        <div class="resize-handle n"  data-dir="n"></div>
+        <div class="resize-handle s"  data-dir="s"></div>
+        <div class="resize-handle e"  data-dir="e"></div>
+        <div class="resize-handle w"  data-dir="w"></div>
+        <div class="resize-handle ne" data-dir="ne"></div>
+        <div class="resize-handle nw" data-dir="nw"></div>
+        <div class="resize-handle se" data-dir="se"></div>
+        <div class="resize-handle sw" data-dir="sw"></div>
+    </div>
+
+    <!-- ── 用户面板 ── -->
+    <div class="float-panel" id="panel-user" style="left:240px;top:220px;width:320px;height:180px;">
+        <div class="panel-bar">
+            <div class="tl-wrap">
+                <div class="tl red"    onclick="closePanel('user')"    title="关闭"></div>
+                <div class="tl yellow" onclick="minimizePanel('user')" title="最小化/恢复"></div>
+                <div class="tl green"  onclick="maximizePanel('user')" title="全屏/恢复"></div>
+            </div>
+            <span class="panel-title">nmcl — 用户</span>
+        </div>
+        <div class="panel-body">
+            <div class="user-placeholder">
+                <div class="user-placeholder-title">// 用户资料</div>
+                <div class="user-placeholder-sub">即将推出...</div>
+            </div>
+        </div>
+        <div class="resize-handle n"  data-dir="n"></div>
+        <div class="resize-handle s"  data-dir="s"></div>
+        <div class="resize-handle e"  data-dir="e"></div>
+        <div class="resize-handle w"  data-dir="w"></div>
+        <div class="resize-handle ne" data-dir="ne"></div>
+        <div class="resize-handle nw" data-dir="nw"></div>
+        <div class="resize-handle se" data-dir="se"></div>
+        <div class="resize-handle sw" data-dir="sw"></div>
+    </div>
+</div>
+
+<!-- ════ Java 安装弹窗 ════ -->
+<div id="javaModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="modal-header-dot"></div>
+            <div class="modal-title">缺少 Java 运行环境</div>
+        </div>
+        <div class="modal-body-wrap">
+            <div class="modal-body" id="javaModalBody">
+                此版本需要 <b>Java <span id="targetJavaVer">8</span></b>。<br>
+                是否自动下载并安装？
+            </div>
+            <div id="javaProgressUI" style="display:none;">
+                <div class="java-prog-row">
+                    <span id="javaStatusText">正在下载...</span>
+                    <span id="javaPercent">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="javaProgressBar"></div>
+                </div>
+            </div>
+            <div class="modal-actions" id="javaModalActions">
+                <button class="modal-btn btn-secondary" onclick="closeJavaModal()">取消</button>
+                <button class="modal-btn btn-primary"   onclick="confirmInstallJava()">安装</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+"use strict";
+
+// ══════════════════════════════════════════════
+//  SIDEBAR
+// ══════════════════════════════════════════════
+const sidebar = document.getElementById('sidebar');
+
+function toggleSidebar() {
+    const exp = sidebar.classList.toggle('expanded');
+    sidebar.querySelector('.sb-toggle-label').textContent = exp ? '收起' : '展开';
+}
+
+// ══════════════════════════════════════════════
+//  PANEL STATE
+// ══════════════════════════════════════════════
+// 记录每个面板的停靠位置和尺寸（拖拽结束后 commit）
+const pState = {
+    play:     { maximized: false, minimized: false },
+    settings: { maximized: false, minimized: false },
+    user:     { maximized: false, minimized: false }
+};
+
+const mc = document.getElementById('mainContent');
+
+function getPanel(n) { return document.getElementById('panel-' + n); }
+function getNav(n)   { return document.getElementById('nav-'   + n); }
+
+function bringToFront(panel) {
+    document.querySelectorAll('.float-panel').forEach(p => p.classList.remove('on-top'));
+    panel.classList.add('on-top');
+}
+
+// ── 读写面板的「停靠坐标」（inline style left/top）
+function getAnchor(p) {
+    return {
+        l: parseFloat(p.style.left)  || 0,
+        t: parseFloat(p.style.top)   || 0,
+        w: p.offsetWidth,
+        h: p.offsetHeight
+    };
+}
+
+function setAnchor(p, l, t, w, h) {
+    p.style.left = l + 'px';
+    p.style.top  = t + 'px';
+    if (w != null) p.style.width  = w + 'px';
+    if (h != null) p.style.height = h + 'px';
+    p.style.transform = '';
+}
+
+// ── 打开 ──
+function openPanel(name) {
+    const p = getPanel(name);
+    
+    // 安全检查：如果面板跑出屏幕，强制拉回居中
+    ensurePanelVisible(p);
+    
+    p.classList.add('visible');
+    getNav(name).classList.add('active');
+    bringToFront(p);
+    p.style.animation = 'panelIn 0.22s cubic-bezier(0.16,1,0.3,1)';
+    p.addEventListener('animationend', () => p.style.animation = '', { once: true });
+}
+
+function ensurePanelVisible(p) {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    
+    let l = parseFloat(p.style.left) || 0;
+    let t = parseFloat(p.style.top)  || 0;
+    const w = parseFloat(p.style.width)  || 320;
+    const h = parseFloat(p.style.height) || 200;
+    
+    // 判定是否“找不到”：标题栏中心点不在屏幕内
+    const cx = l + w / 2;
+    const cy = t + 20; // 标题栏大约高度
+    
+    let reset = false;
+    if (cx < 0 || cx > W) reset = true;
+    if (cy < 0 || cy > H) reset = true;
+    
+    // 额外：如果是在手机竖屏下，强制检查是否完全溢出
+    if (W < 600 && (l < 0 || l > W - 50)) reset = true;
+
+    if (reset) {
+        const nl = Math.max(0, (W - w) / 2);
+        const nt = Math.max(0, (H - h) / 2);
+        p.style.left = nl + 'px';
+        p.style.top  = nt + 'px';
+        p.style.transform = '';
+    }
+}
+
+// ── 关闭（红灯）──
+function closePanel(name) {
+    const p  = getPanel(name);
+    const st = pState[name];
+    // 如果在全屏/最小化状态，先恢复再关
+    if (st.maximized) { p.classList.remove('maximized'); st.maximized = false; }
+    if (st.minimized) { p.classList.remove('minimized'); st.minimized = false; }
+    p.classList.remove('visible');
+    getNav(name).classList.remove('active');
+}
+
+// ── 最小化（黄灯，toggle）──
+function minimizePanel(name) {
+    const p  = getPanel(name);
+    const st = pState[name];
+    if (st.minimized) {
+        p.classList.remove('minimized');
+        st.minimized = false;
+    } else {
+        if (st.maximized) { restoreMax(p, name); }
+        p.classList.add('minimized');
+        st.minimized = true;
+    }
+}
+
+// ── 全屏（绿灯，toggle）──
+function maximizePanel(name) {
+    const p  = getPanel(name);
+    const st = pState[name];
+    if (st.maximized) {
+        restoreMax(p, name);
+    } else {
+        if (st.minimized) { p.classList.remove('minimized'); st.minimized = false; }
+        // 保存当前位置
+        const a = getAnchor(p);
+        st.savedL = a.l; st.savedT = a.t; st.savedW = a.w; st.savedH = a.h;
+        // 启用动画 transition
+        withAnim(p, () => {
+            p.style.left = '0px'; p.style.top = '0px';
+            p.style.width = mc.offsetWidth + 'px';
+            p.style.height = mc.offsetHeight + 'px';
+            p.style.transform = '';
+        });
+        st.maximized = true;
+        bringToFront(p);
+    }
+}
+
+function restoreMax(p, name) {
+    const st = pState[name];
+    withAnim(p, () => {
+        p.style.left   = st.savedL + 'px';
+        p.style.top    = st.savedT + 'px';
+        p.style.width  = st.savedW + 'px';
+        p.style.height = st.savedH + 'px';
+        p.style.transform = '';
+    });
+    st.maximized = false;
+}
+
+// 挂上 .animating 执行，transitionend 后摘掉，防止影响拖拽
+function withAnim(p, fn) {
+    p.classList.add('animating');
+    fn();
+    const done = () => {
+        p.classList.remove('animating');
+        p.removeEventListener('transitionend', done);
+    };
+    p.addEventListener('transitionend', done);
+}
+
+// ── Toggle（侧边栏按钮）──
+function togglePanel(name) {
+    const p = getPanel(name);
+    if (p.classList.contains('visible')) closePanel(name);
+    else openPanel(name);
+}
+
+// ══════════════════════════════════════════════
+//  DRAG — 用 transform:translate 实现，不触发 layout
+// ══════════════════════════════════════════════
+
+// 辅助：获取指针坐标（兼容鼠标/触摸）
+function getPointer(e) {
+    if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+}
+
+document.querySelectorAll('.panel-bar').forEach(bar => {
+    const panel = bar.closest('.float-panel');
+    const name  = panel.id.replace('panel-', '');
+
+    let drag = false;
+    let startMouseX, startMouseY;   // 拖拽开始时鼠标坐标
+    
+    // MOUSE
+    bar.addEventListener('mousedown', e => {
+        if (e.target.classList.contains('tl')) return;
+        if (pState[name].maximized) return;
+        commitTransform(panel);
+        activeDragPanel = panel;
+        panel._dragStartX = e.clientX;
+        panel._dragStartY = e.clientY;
+        bringToFront(panel);
+        document.body.style.cursor = 'grabbing';
+        e.preventDefault();
+    });
+
+    // TOUCH
+    bar.addEventListener('touchstart', e => {
+        if (e.target.classList.contains('tl')) return;
+        if (pState[name].maximized) return;
+        commitTransform(panel);
+        activeDragPanel = panel;
+        const p = getPointer(e);
+        panel._dragStartX = p.x;
+        panel._dragStartY = p.y;
+        bringToFront(panel);
+        // 防止触摸时触发鼠标模拟事件
+        // e.preventDefault(); 
+    }, { passive: false });
+});
+
+// 统一 mousemove + mouseup，避免多个监听器
+let activeDragPanel  = null;
+let activeResizeInfo = null;
+
+// MOUSE EVENTS
+document.addEventListener('mousemove', e => {
+    if (activeDragPanel) {
+        onDragMove(e, activeDragPanel);
+    } else if (activeResizeInfo) {
+        onResizeMove(e, activeResizeInfo);
+    }
+}, { passive: true });
+
+document.addEventListener('mouseup', e => {
+    if (activeDragPanel) {
+        commitTransform(activeDragPanel);
+        activeDragPanel = null;
+        document.body.style.cursor = '';
+    }
+    if (activeResizeInfo) {
+        activeResizeInfo = null;
+        document.body.style.cursor = '';
+    }
+});
+
+// TOUCH EVENTS
+document.addEventListener('touchmove', e => {
+    if (activeDragPanel) {
+        e.preventDefault(); // 防止页面滚动
+        onDragMove(e, activeDragPanel);
+    } else if (activeResizeInfo) {
+        e.preventDefault();
+        onResizeMove(e, activeResizeInfo);
+    }
+}, { passive: false });
+
+document.addEventListener('touchend', e => {
+    if (activeDragPanel) {
+        commitTransform(activeDragPanel);
+        activeDragPanel = null;
+    }
+    if (activeResizeInfo) {
+        activeResizeInfo = null;
+    }
+});
+
+function onDragMove(e, panel) {
+    const p = getPointer(e);
+    const dx = p.x - panel._dragStartX;
+    const dy = p.y - panel._dragStartY;
+    
+    // 移除边界限制，允许拖到窗口外
+    panel.style.transform = `translate(${dx}px,${dy}px)`;
+}
+
+function commitTransform(panel) {
+    if (!panel) return;
+    const style = panel.style.transform;
+    if (!style || style === 'none' || style === '') return;
+    const m = style.match(/translate\(([^,]+)px,([^)]+)px\)/);
+    if (!m) return;
+    const dx = parseFloat(m[1]), dy = parseFloat(m[2]);
+    panel.style.left = (parseFloat(panel.style.left) || 0) + dx + 'px';
+    panel.style.top  = (parseFloat(panel.style.top)  || 0) + dy + 'px';
+    panel.style.transform = '';
+}
+
+// ══════════════════════════════════════════════
+//  RESIZE
+// ══════════════════════════════════════════════
+const MIN_W = 220, MIN_H = 80;
+
+document.querySelectorAll('.resize-handle').forEach(handle => {
+    const panel = handle.closest('.float-panel');
+    const name  = panel.id.replace('panel-', '');
+    const dir   = handle.dataset.dir;
+
+    const startResize = (e, x, y) => {
+        if (pState[name].maximized || pState[name].minimized) return;
+        commitTransform(panel);
+        bringToFront(panel);
+
+        activeResizeInfo = {
+            panel, dir,
+            startX: x, startY: y,
+            startL: parseFloat(panel.style.left)   || 0,
+            startT: parseFloat(panel.style.top)    || 0,
+            startW: panel.offsetWidth,
+            startH: panel.offsetHeight
+        };
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    // MOUSE
+    handle.addEventListener('mousedown', e => {
+        startResize(e, e.clientX, e.clientY);
+        document.body.style.cursor = getComputedStyle(handle).cursor;
+    });
+
+    // TOUCH
+    handle.addEventListener('touchstart', e => {
+        const p = getPointer(e);
+        startResize(e, p.x, p.y);
+    }, { passive: false });
+});
+
+function onResizeMove(e, ri) {
+    const p = getPointer(e);
+    const { panel, dir, startX, startY, startL, startT, startW, startH } = ri;
+    const dx = p.x - startX;
+    const dy = p.y - startY;
+    const mcW = mc.offsetWidth, mcH = mc.offsetHeight;
+
+    let nl = startL, nt = startT, nw = startW, nh = startH;
+
+    if (dir.includes('e')) nw = Math.max(MIN_W, startW + dx);
+    if (dir.includes('s')) nh = Math.max(MIN_H, startH + dy);
+    if (dir.includes('w')) { nw = Math.max(MIN_W, startW - dx); nl = startL + startW - nw; }
+    if (dir.includes('n')) { nh = Math.max(MIN_H, startH - dy); nt = startT + startH - nh; }
+
+    nl = Math.max(0, Math.min(nl, mcW - MIN_W));
+    nt = Math.max(0, Math.min(nt, mcH - MIN_H));
+
+    // 直接写 style — resize 必须改 width/height，但不 transition
+    panel.style.left   = nl + 'px';
+    panel.style.top    = nt + 'px';
+    panel.style.width  = nw + 'px';
+    panel.style.height = nh + 'px';
+}
+
+// ══════════════════════════════════════════════
+//  GAME LOGIC (MOCKED FOR PREVIEW)
+// ══════════════════════════════════════════════
+let requiredJavaVersion = 21;
+let isJavaInstalled = false; // 模拟 Java 是否已安装
+const versionSelect = document.getElementById('versionSelect');
+const statusMsg     = document.getElementById('statusMsg');
+const launchBtn     = document.getElementById('launchBtn');
+
+// Mock versions - 补全 1.0 到 1.21.11 (主要版本 + 热门版本)
+const MOCK_VERSIONS = [
+    { id: '1.21.11', type: 'release' }, // 用户指定的版本
+    { id: '1.21.4', type: 'release' },
+    { id: '1.21.1', type: 'release' },
+    { id: '1.21',   type: 'release' },
+    { id: '1.20.6', type: 'release' },
+    { id: '1.20.4', type: 'release' },
+    { id: '1.20.2', type: 'release' },
+    { id: '1.20.1', type: 'release' },
+    { id: '1.19.4', type: 'release' },
+    { id: '1.19.3', type: 'release' },
+    { id: '1.19.2', type: 'release' },
+    { id: '1.19.1', type: 'release' },
+    { id: '1.19',   type: 'release' },
+    { id: '1.18.2', type: 'release' },
+    { id: '1.18.1', type: 'release' },
+    { id: '1.18',   type: 'release' },
+    { id: '1.17.1', type: 'release' },
+    { id: '1.17',   type: 'release' },
+    { id: '1.16.5', type: 'release' },
+    { id: '1.16.4', type: 'release' },
+    { id: '1.16.3', type: 'release' },
+    { id: '1.16.2', type: 'release' },
+    { id: '1.16.1', type: 'release' },
+    { id: '1.16',   type: 'release' },
+    { id: '1.15.2', type: 'release' },
+    { id: '1.15.1', type: 'release' },
+    { id: '1.15',   type: 'release' },
+    { id: '1.14.4', type: 'release' },
+    { id: '1.14.2', type: 'release' },
+    { id: '1.14',   type: 'release' },
+    { id: '1.13.2', type: 'release' },
+    { id: '1.13',   type: 'release' },
+    { id: '1.12.2', type: 'release' },
+    { id: '1.12.1', type: 'release' },
+    { id: '1.12',   type: 'release' },
+    { id: '1.11.2', type: 'release' },
+    { id: '1.11',   type: 'release' },
+    { id: '1.10.2', type: 'release' },
+    { id: '1.10',   type: 'release' },
+    { id: '1.9.4',  type: 'release' },
+    { id: '1.9.2',  type: 'release' },
+    { id: '1.9',    type: 'release' },
+    { id: '1.8.9',  type: 'release' },
+    { id: '1.8.8',  type: 'release' },
+    { id: '1.8',    type: 'release' },
+    { id: '1.7.10', type: 'release' },
+    { id: '1.7.9',  type: 'release' },
+    { id: '1.7.2',  type: 'release' },
+    { id: '1.6.4',  type: 'release' },
+    { id: '1.6.1',  type: 'release' },
+    { id: '1.5.2',  type: 'release' },
+    { id: '1.5.1',  type: 'release' },
+    { id: '1.4.7',  type: 'release' },
+    { id: '1.4.2',  type: 'release' },
+    { id: '1.3.2',  type: 'release' },
+    { id: '1.2.5',  type: 'release' },
+    { id: '1.1',    type: 'release' },
+    { id: '1.0',    type: 'release' }
+];
+
+setTimeout(() => {
+    versionSelect.innerHTML = '';
+    MOCK_VERSIONS.forEach(v => {
+        const o = document.createElement('option');
+        o.value = v.id; o.text = v.id;
+        versionSelect.appendChild(o);
+    });
+    // 打开启动面板
+    openPanel('play');
+}, 500);
+
+function launchGame() {
+    const username = document.getElementById('username').value.trim();
+    if (!username) { shakePanel('play'); return; }
+    
+    setLoading(true);
+    statusMsg.innerText = '正在初始化...';
+    statusMsg.style.color = '';
+
+    // Mock launch
+    setTimeout(() => {
+        if (!isJavaInstalled) {
+            // 模拟缺少 Java
+            statusMsg.innerText = '缺少 Java 环境';
+            statusMsg.style.color = 'var(--rust)';
+            setLoading(false);
+            showJavaModal();
+        } else {
+            // 启动成功
+            statusMsg.innerText = '启动成功！(Preview Mode)';
+            statusMsg.style.color = 'var(--lime)';
+            setLoading(false);
+        }
+    }, 1000);
+}
+
+function setLoading(on) {
+    launchBtn.disabled = on;
+    launchBtn.innerHTML = on
+        ? '处理中...'
+        : '<svg style="width:15px;height:15px;fill:currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> 启动游戏';
+}
+
+function shakePanel(name) {
+    const p = getPanel(name);
+    commitTransform(p);
+    const seq = [5,-5,4,-4,2,-2,0];
+    seq.forEach((v,i) => setTimeout(() => p.style.transform = `translateX(${v}px)`, i * 45));
+    setTimeout(() => { p.style.transform = ''; commitTransform(p); }, seq.length * 45 + 50);
+}
+
+// Java Modal (Mocked)
+const javaModal = document.getElementById('javaModal');
+let pollTimer = null;
+
+function showJavaModal() {
+    document.getElementById('targetJavaVer').innerText        = requiredJavaVersion;
+    document.getElementById('javaProgressUI').style.display   = 'none';
+    document.getElementById('javaModalActions').style.display = 'flex';
+    javaModal.style.display = 'flex';
+}
+
+function closeJavaModal() {
+    javaModal.style.display = 'none';
+    if (pollTimer) clearInterval(pollTimer);
+}
+
+function confirmInstallJava() {
+    document.getElementById('javaModalActions').style.display = 'none';
+    document.getElementById('javaProgressUI').style.display   = 'block';
+    
+    // Mock install
+    let progress = 0;
+    pollTimer = setInterval(() => {
+        progress += 2; // 稍微慢一点
+        const pct = progress + '%';
+        document.getElementById('javaProgressBar').style.width = pct;
+        document.getElementById('javaPercent').innerText = pct;
+        
+        if (progress >= 100) {
+            clearInterval(pollTimer);
+            document.getElementById('javaStatusText').innerText = '完成！正在启动...';
+            document.getElementById('javaStatusText').style.color = 'var(--lime)';
+            isJavaInstalled = true; // 标记 Java 已安装
+            
+            setTimeout(() => { 
+                closeJavaModal(); 
+                launchGame(); // 自动重新启动
+            }, 1000);
+        }
+    }, 50);
+}
+</script>
+</body>
+</html>

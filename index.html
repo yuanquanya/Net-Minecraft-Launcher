@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NMCL — Net Minecraft Launcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Serif+SC:wght@300;400;700&family=JetBrains+Mono:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --lime:   #a3e635;
+      --rust:   #ea580c;
+      --amber:  #f59e0b;
+      --dark:   #0a0d09;
+      --panel:  #0f1410;
+      --mid:    #182014;
+      --stroke: #243020;
+      --muted:  #4a6040;
+      --text:   #b8c8a0;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--dark);
+      color: var(--text);
+      font-family: 'Noto Serif SC', serif;
+      overflow-x: hidden;
+      cursor: none;
+    }
+
+    .cursor {
+      position: fixed;
+      width: 6px; height: 6px;
+      background: var(--lime);
+      pointer-events: none;
+      z-index: 9999;
+    }
+    .cursor-ring {
+      position: fixed;
+      width: 22px; height: 22px;
+      border: 1px solid rgba(163,230,53,0.5);
+      pointer-events: none;
+      z-index: 9998;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px, transparent 3px,
+        rgba(0,0,0,0.1) 3px, rgba(0,0,0,0.1) 4px
+      );
+      pointer-events: none;
+      z-index: 500;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.1rem 3rem;
+      border-bottom: 1px solid var(--stroke);
+      background: rgba(10,13,9,0.92);
+      backdrop-filter: blur(16px);
+    }
+
+    .nav-brand { display: flex; align-items: baseline; gap: 1rem; }
+
+    .nav-logo {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.7rem;
+      color: var(--lime);
+    }
+
+    .nav-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.52rem;
+      color: var(--rust);
+      border: 1px solid var(--rust);
+      padding: 0.15rem 0.5rem;
+      letter-spacing: 0.1em;
+      animation: badge-pulse 3s ease-in-out infinite;
+    }
+    @keyframes badge-pulse { 50% { opacity: 0.55; } }
+
+    nav ul { list-style: none; display: flex; gap: 2.5rem; }
+    nav ul a {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-decoration: none;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    nav ul a:hover { color: var(--lime); }
+
+    /* ALPHA BANNER */
+    .alpha-banner {
+      position: absolute;
+      top: 4.7rem; left: 0; right: 0;
+      background: rgba(234,88,12,0.07);
+      border-bottom: 1px solid rgba(234,88,12,0.2);
+      padding: 0.5rem 3rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.58rem;
+      color: rgba(234,88,12,0.9);
+      letter-spacing: 0.12em;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      z-index: 100;
+    }
+
+    .alpha-banner a {
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* HERO */
+    .hero {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 55% 45%;
+      align-items: center;
+      padding: 8rem 0 4rem 3rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-bg-right {
+      position: absolute;
+      right: 0; top: 0; bottom: 0;
+      width: 48%;
+      background:
+        linear-gradient(to right, var(--dark) 0%, transparent 25%),
+        repeating-linear-gradient(
+          60deg,
+          var(--stroke) 0, var(--stroke) 1px,
+          transparent 1px, transparent 18px
+        );
+      opacity: 0.55;
+    }
+
+    .hero-left { position: relative; z-index: 2; }
+
+    .eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 1.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .blink-dot {
+      width: 6px; height: 6px;
+      background: var(--lime);
+      display: inline-block;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .hero h1 {
+      font-family: 'Press Start 2P', monospace;
+      font-size: clamp(1.1rem, 2.8vw, 2.1rem);
+      line-height: 1.85;
+      margin-bottom: 0.3rem;
+    }
+
+    .hero h1 .g { color: var(--lime); }
+    .hero h1 .w { color: #fff; }
+
+    .hero-full-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      color: var(--muted);
+      letter-spacing: 0.14em;
+      margin-top: 0.6rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .hero-desc {
+      font-size: 0.93rem;
+      color: var(--muted);
+      line-height: 2.2;
+      max-width: 400px;
+      border-left: 2px solid var(--stroke);
+      padding-left: 1.2rem;
+      margin-bottom: 2.5rem;
+    }
+    .hero-desc strong { color: var(--text); font-weight: 400; }
+
+    .btn-group { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+
+    .btn-primary {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.52rem;
+      padding: 0.9rem 1.6rem;
+      background: var(--lime);
+      color: var(--dark);
+      text-decoration: none;
+      letter-spacing: 0.06em;
+      clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+      transition: filter 0.15s, transform 0.1s;
+    }
+    .btn-primary:hover { filter: brightness(1.1); transform: translate(-2px,-2px); }
+
+    .btn-ghost {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      padding: 0.82rem 1.3rem;
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid var(--stroke);
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
+
+    .btn-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.56rem;
+      color: var(--muted);
+    }
+
+    /* TERMINAL */
+    .hero-right { position: relative; z-index: 2; padding: 2rem 2.5rem 2rem 1rem; }
+
+    .terminal {
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      position: relative;
+    }
+    .terminal::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      background: linear-gradient(
+        135deg,
+        rgba(163,230,53,0.18) 0%, transparent 35%,
+        transparent 65%, rgba(234,88,12,0.12) 100%
+      );
+      z-index: -1;
+    }
+
+    .terminal-bar {
+      padding: 0.55rem 1rem;
+      border-bottom: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.02);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .t-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .t-dot.r { background: #ef4444; }
+    .t-dot.y { background: #f59e0b; }
+    .t-dot.g { background: var(--lime); animation: badge-pulse 2s ease-in-out infinite; }
+
+    .t-title { font-family: 'JetBrains Mono', monospace; font-size: 0.56rem; color: var(--muted); letter-spacing: 0.08em; margin-left: 0.5rem; }
+
+    .terminal-body { padding: 1.3rem 1.4rem; font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; line-height: 2.1; }
+
+    .tl { display: flex; gap: 0.5rem; }
+    .tp { color: var(--lime); white-space: nowrap; }
+    .tc { color: var(--text); }
+    .tm { color: var(--muted); font-style: italic; }
+    .tok { color: var(--lime); }
+    .tw { color: var(--amber); }
+    .ti { color: #38bdf8; }
+    .tb { height: 0.4rem; }
+
+    .t-prog { margin: 0.3rem 0 0.2rem; height: 3px; background: var(--stroke); overflow: hidden; }
+    .t-prog-fill { height: 100%; background: var(--lime); animation: prog 4s ease-in-out infinite; }
+    @keyframes prog { 0%{width:0} 70%,100%{width:100%} }
+
+    .t-cur { display: inline-block; width: 6px; height: 11px; background: var(--lime); vertical-align: text-bottom; animation: blink 0.85s step-end infinite; margin-left: 1px; }
+
+    /* ARCH BAND */
+    .arch-band {
+      border-top: 1px solid var(--stroke);
+      border-bottom: 1px solid var(--stroke);
+      background: var(--panel);
+      padding: 2.5rem 3rem;
+    }
+    .arch-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      overflow-x: auto;
+    }
+    .arch-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.56rem;
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .arch-flow { display: flex; align-items: center; flex: 1; min-width: 0; }
+
+    .arch-node {
+      background: var(--mid);
+      border: 1px solid var(--stroke);
+      padding: 0.75rem 1.1rem;
+      text-align: center;
+      min-width: 110px;
+      flex-shrink: 0;
+    }
+    .arch-node.hl { border-color: rgba(163,230,53,0.4); }
+    .arch-node.rhl { border-color: rgba(234,88,12,0.4); }
+
+    .arch-node-name {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.48rem;
+      color: #fff;
+      margin-bottom: 0.3rem;
+      line-height: 1.6;
+    }
+    .arch-node-tech {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.52rem;
+      color: var(--lime);
+    }
+
+    .arch-arr {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 0.5rem;
+      flex-shrink: 0;
+    }
+    .arch-arr-lbl {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.48rem;
+      color: var(--muted);
+      margin-bottom: 0.2rem;
+    }
+    .arch-arr-sym {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--stroke);
+    }
+
+    /* FEATURES */
+    .features-section { padding: 6rem 3rem; max-width: 1280px; margin: 0 auto; }
+
+    .section-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 3rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--stroke);
+    }
+    .section-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.56rem;
+      color: var(--lime);
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      margin-bottom: 0.8rem;
+    }
+    .section-title {
+      font-family: 'Press Start 2P', monospace;
+      font-size: clamp(0.7rem, 1.8vw, 1.05rem);
+      color: #fff;
+      line-height: 1.9;
+    }
+    .section-sub { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 1px;
+      background: var(--stroke);
+    }
+
+    .feat-card {
+      background: var(--panel);
+      padding: 2.2rem;
+      position: relative;
+      overflow: hidden;
+      transition: background 0.25s;
+    }
+    .feat-card:hover { background: var(--mid); }
+
+    .feat-card.wide { grid-column: 1 / 3; }
+    .feat-card.tall {
+      grid-column: 3;
+      grid-row: 1 / 3;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      min-height: 360px;
+    }
+    .feat-card.tall::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 52%;
+      background:
+        linear-gradient(to bottom, transparent 50%, var(--panel) 100%),
+        repeating-linear-gradient(-45deg, var(--stroke) 0, var(--stroke) 1px, transparent 1px, transparent 14px);
+    }
+
+    .feat-cpp {
+      position: absolute;
+      top: 1.5rem; right: 1.5rem;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 1.6rem;
+      color: var(--stroke);
+      user-select: none;
+    }
+
+    .feat-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.52rem;
+      color: var(--muted);
+      margin-bottom: 1.2rem;
+      letter-spacing: 0.1em;
+    }
+    .feat-title {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.62rem;
+      color: #fff;
+      line-height: 2;
+      margin-bottom: 0.9rem;
+    }
+    .feat-card.wide .feat-title,
+    .feat-card.tall .feat-title { font-size: 0.78rem; }
+
+    .feat-desc { font-size: 0.87rem; color: var(--muted); line-height: 2; max-width: 500px; }
+
+    .feat-tag {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.5rem;
+      padding: 0.18rem 0.5rem;
+      border: 1px solid var(--stroke);
+      color: var(--muted);
+      margin-top: 1.2rem;
+      letter-spacing: 0.08em;
+    }
+    .feat-tag.g { border-color: var(--lime); color: var(--lime); }
+    .feat-tag.o { border-color: var(--rust); color: var(--rust); }
+
+    /* ALPHA STATUS */
+    .alpha-section {
+      background: var(--mid);
+      border-top: 1px solid var(--stroke);
+      border-bottom: 1px solid var(--stroke);
+      padding: 5rem 3rem;
+    }
+    .alpha-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1px;
+      background: var(--stroke);
+      margin-bottom: 3rem;
+    }
+    .alpha-cell { background: var(--panel); padding: 2rem; }
+    .alpha-cell-lbl {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.53rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.8rem;
+    }
+    .alpha-cell-val {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.72rem;
+      color: #fff;
+      line-height: 1.8;
+    }
+    .alpha-cell-val.warn { color: var(--rust); }
+    .alpha-cell-val.ok   { color: var(--lime); }
+    .alpha-cell-sub { font-family: 'JetBrains Mono', monospace; font-size: 0.57rem; color: var(--muted); margin-top: 0.5rem; }
+
+    .roadmap { max-width: 1200px; margin: 0 auto; }
+    .roadmap-lbl {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.57rem; color: var(--muted);
+      letter-spacing: 0.2em; text-transform: uppercase;
+      margin-bottom: 1.2rem;
+    }
+    .roadmap-items { display: flex; flex-direction: column; gap: 1px; }
+    .roadmap-item {
+      background: var(--panel);
+      display: grid;
+      grid-template-columns: 170px 1fr 80px;
+      align-items: center;
+      gap: 2rem;
+      padding: 0.95rem 1.4rem;
+      border: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+    .roadmap-item:hover { border-color: var(--stroke); }
+    .ri-name { font-family: 'JetBrains Mono', monospace; font-size: 0.63rem; color: var(--text); }
+    .ri-bar  { height: 3px; background: var(--stroke); }
+    .ri-fill { height: 100%; background: var(--lime); }
+    .ri-fill.w { background: var(--amber); }
+    .ri-fill.n { background: var(--stroke); }
+    .ri-pct  { font-family: 'Press Start 2P', monospace; font-size: 0.48rem; color: var(--muted); text-align: right; }
+
+    /* DOWNLOAD */
+    .dl-section {
+      padding: 6rem 3rem;
+      max-width: 1280px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5rem;
+      align-items: start;
+    }
+    .dl-lbl { font-family: 'JetBrains Mono', monospace; font-size: 0.56rem; color: var(--lime); letter-spacing: 0.25em; text-transform: uppercase; margin-bottom: 1rem; }
+    .dl-title { font-family: 'Press Start 2P', monospace; font-size: clamp(0.7rem, 1.8vw, 1.1rem); color: #fff; line-height: 1.9; margin-bottom: 1.5rem; }
+    .dl-note { font-size: 0.85rem; color: var(--muted); line-height: 2.1; }
+    .dl-note code { font-family: 'JetBrains Mono', monospace; font-size: 0.73rem; color: var(--lime); background: var(--panel); padding: 0.1rem 0.4rem; border: 1px solid var(--stroke); }
+    .dl-warn {
+      margin-top: 1.5rem;
+      padding: 1rem 1.2rem;
+      background: rgba(234,88,12,0.06);
+      border: 1px solid rgba(234,88,12,0.2);
+      border-left: 3px solid var(--rust);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6rem;
+      color: rgba(234,88,12,0.85);
+      line-height: 1.9;
+    }
+
+    .dl-options { display: flex; flex-direction: column; gap: 1px; background: var(--stroke); }
+    .dl-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.2rem 1.4rem;
+      background: var(--panel);
+      text-decoration: none;
+      transition: background 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .dl-btn:hover { background: var(--mid); }
+    .dl-btn::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 2px;
+      background: var(--lime);
+      transform: scaleY(0);
+      transform-origin: bottom;
+      transition: transform 0.2s;
+    }
+    .dl-btn:hover::before { transform: scaleY(1); }
+
+    .dl-btn-info { display: flex; flex-direction: column; gap: 0.3rem; }
+    .dl-btn-name { font-family: 'JetBrains Mono', monospace; font-size: 0.73rem; color: var(--text); }
+    .dl-btn-meta { font-family: 'JetBrains Mono', monospace; font-size: 0.56rem; color: var(--muted); }
+
+    .dl-btn-right { display: flex; align-items: center; gap: 0.7rem; }
+    .dl-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.5rem;
+      padding: 0.15rem 0.42rem;
+      border: 1px solid var(--stroke);
+      color: var(--muted);
+      letter-spacing: 0.07em;
+    }
+    .dl-tag.g { border-color: var(--lime); color: var(--lime); }
+    .dl-tag.o { border-color: var(--rust); color: var(--rust); }
+
+    .dl-arr { font-family: 'Press Start 2P', monospace; font-size: 0.44rem; color: var(--lime); }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid var(--stroke);
+      background: var(--dark);
+      padding: 2rem 3rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .footer-brand { font-family: 'Press Start 2P', monospace; font-size: 0.52rem; color: var(--muted); line-height: 2; }
+    .footer-brand span { color: var(--lime); }
+    .footer-copy { font-family: 'JetBrains Mono', monospace; font-size: 0.52rem; color: var(--stroke); letter-spacing: 0.05em; }
+    .footer-links { display: flex; gap: 2rem; }
+    .footer-links a { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); text-decoration: none; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--lime); }
+    .footer-disc { font-family: 'JetBrains Mono', monospace; font-size: 0.5rem; color: var(--stroke); text-align: right; line-height: 1.9; }
+
+    .side-text {
+      position: fixed;
+      right: 1.2rem; top: 50%;
+      transform: translateY(-50%) rotate(90deg);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.48rem;
+      color: var(--stroke);
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.55s ease, transform 0.55s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    @media (max-width: 960px) {
+      .hero { grid-template-columns: 1fr; padding: 9rem 1.5rem 3rem; }
+      .hero-right, .hero-bg-right { display: none; }
+      .arch-inner { flex-direction: column; align-items: flex-start; }
+      .arch-flow { flex-wrap: wrap; gap: 0.5rem; }
+      .features-grid { grid-template-columns: 1fr; }
+      .feat-card.wide, .feat-card.tall { grid-column: auto; grid-row: auto; min-height: auto; }
+      .alpha-inner { grid-template-columns: 1fr; }
+      .dl-section { grid-template-columns: 1fr; gap: 2.5rem; }
+      footer { flex-direction: column; gap: 1.5rem; text-align: center; }
+      nav { padding: 1rem 1.5rem; }
+      nav ul { gap: 1.2rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="cursor" id="cursor"></div>
+  <div class="cursor-ring" id="cursorRing"></div>
+  <div class="side-text">NMCL — Alpha 0.1 — In Development</div>
+
+  <nav>
+    <div class="nav-brand">
+      <span class="nav-logo">NMCL</span>
+      <span class="nav-badge">Alpha 0.1</span>
+    </div>
+    <ul>
+      <li><a href="#features">特性</a></li>
+      <li><a href="#status">进度</a></li>
+      <li><a href="#download">获取</a></li>
+      <li><a href="https://github.com/yuanquanya/Net-Minecraft-Lancher" target="_blank">GitHub →</a></li>
+    </ul>
+  </nav>
+
+  <div class="alpha-banner">
+    ⚠ 早期 Alpha 版本，正在积极开发中——欢迎参与：
+    <a href="https://github.com/yuanquanya/Net-Minecraft-Lancher" target="_blank">github.com/yuanquanya/Net-Minecraft-Lancher</a>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg-right"></div>
+
+    <div class="hero-left">
+      <div class="eyebrow"><span class="blink-dot"></span> Net Minecraft Launcher — C++ × HTML</div>
+      <h1>
+        <span class="g">Net</span><br>
+        <span class="w">Minecraft</span><br>
+        <span class="g">Launcher</span>
+      </h1>
+      <div class="hero-full-name">// NMCL · yuanquanya / Net-Minecraft-Lancher</div>
+      <p class="hero-desc">
+        <strong>C++ 原生后端</strong>开启本地 HTTP 服务，<br>
+        <strong>HTML 前端</strong>负责所有界面交互——<br>
+        这是一个在架构上就与众不同的启动器。<br>
+        轻量、透明、没有 Electron 的负担。
+      </p>
+      <div class="btn-group">
+        <a href="https://github.com/yuanquanya/Net-Minecraft-Lancher" target="_blank" class="btn-primary">GitHub →</a>
+        <a href="preview.html" target="_blank" class="btn-ghost" style="color:var(--lime);border-color:var(--lime)">体验 UI →</a>
+        <a href="#status" class="btn-ghost">开发进度</a>
+        <span class="btn-label">// Alpha 0.1 · 开发中</span>
+      </div>
+    </div>
+
+    <div class="hero-right">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="t-dot r"></div>
+          <div class="t-dot y"></div>
+          <div class="t-dot g"></div>
+          <span class="t-title">nmcl-server — 127.0.0.1:8080</span>
+        </div>
+        <div class="terminal-body">
+          <div class="tl"><span class="tp">$</span><span class="tc"> ./nmcl</span></div>
+          <div class="tl"><span class="tm">// Net Minecraft Launcher — Alpha 0.1</span></div>
+          <div class="tl"><span class="tm">// C++ Core · yuanquanya</span></div>
+          <div class="tb"></div>
+          <div class="tl"><span class="ti">[INIT]</span><span class="tm"> 启动 C++ 服务核心...</span></div>
+          <div class="tl"><span class="tok">[OK]</span><span class="tc"> HTTP 服务器已就绪</span></div>
+          <div class="tl"><span class="tok">[OK]</span><span class="tc"> 监听 127.0.0.1:8080</span></div>
+          <div class="tb"></div>
+          <div class="tl"><span class="ti">[JAVA]</span><span class="tm"> 缺少 Java 21，自动获取中...</span></div>
+          <div class="t-prog"><div class="t-prog-fill"></div></div>
+          <div class="tl"><span class="tok">[OK]</span><span class="tc"> Java 环境部署完成</span></div>
+          <div class="tb"></div>
+          <div class="tl"><span class="tw">[ALPHA]</span><span class="tm"> v0.1 部分功能开发中</span></div>
+          <div class="tl"><span class="ti">[WEB]</span><span class="tc"> 前端就绪 → 浏览器已打开</span></div>
+          <div class="tl"><span class="tp">$</span><span class="t-cur"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCH -->
+  <div class="arch-band reveal">
+    <div class="arch-inner">
+      <span class="arch-label">// 技术架构</span>
+      <div class="arch-flow">
+        <div class="arch-node hl">
+          <div class="arch-node-name">C++ 核心</div>
+          <div class="arch-node-tech">后端 · 服务端</div>
+        </div>
+        <div class="arch-arr"><span class="arch-arr-lbl">HTTP</span><span class="arch-arr-sym">──→</span></div>
+        <div class="arch-node">
+          <div class="arch-node-name">本地服务</div>
+          <div class="arch-node-tech">127.0.0.1</div>
+        </div>
+        <div class="arch-arr"><span class="arch-arr-lbl">渲染</span><span class="arch-arr-sym">──→</span></div>
+        <div class="arch-node hl">
+          <div class="arch-node-name">HTML 前端</div>
+          <div class="arch-node-tech">UI · 交互层</div>
+        </div>
+        <div class="arch-arr"><span class="arch-arr-lbl">启动</span><span class="arch-arr-sym">──→</span></div>
+        <div class="arch-node rhl">
+          <div class="arch-node-name">Minecraft</div>
+          <div class="arch-node-tech">Java Edition</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section class="features-section" id="features">
+    <div class="section-header reveal">
+      <div>
+        <div class="section-eyebrow">// 设计理念</div>
+        <div class="section-title">为什么是<br>C++ + HTML</div>
+      </div>
+      <div class="section-sub">04 个核心决策</div>
+    </div>
+
+    <div class="features-grid">
+      <div class="feat-card wide reveal">
+        <div class="feat-cpp">C++</div>
+        <div class="feat-num">01 ──────</div>
+        <div class="feat-title">C++ 原生后端 · 本地 HTTP 服务</div>
+        <p class="feat-desc">
+          NMCL 的核心由 C++ 编写，启动后在本地运行一个轻量 HTTP 服务器。前端是标准 HTML/CSS/JS，通过 HTTP 请求与后端通信。没有 Electron，没有打包 Chromium，安装包极小，内存占用极低。架构透明，逻辑清晰。
+        </p>
+        <div>
+          <span class="feat-tag g">C++ CORE</span>
+          <span class="feat-tag" style="margin-left:0.5rem;">LOCAL HTTP</span>
+          <span class="feat-tag" style="margin-left:0.5rem;">NO ELECTRON</span>
+        </div>
+      </div>
+
+      <div class="feat-card tall reveal">
+        <div class="feat-num">02 ──────</div>
+        <div class="feat-title">HTML 前端<br>随时可改</div>
+        <p class="feat-desc">
+          界面层就是标准 web 文件，想改？直接编辑，刷新即生效。对开发者和贡献者极其友好。
+        </p>
+        <span class="feat-tag g">WEB UI</span>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-num">03 ──────</div>
+        <div class="feat-title">Java 环境<br>自动部署</div>
+        <p class="feat-desc">缺 Java？版本不对？NMCL 会自动下载并配置合适的 JDK 环境，一键解决运行库烦恼。</p>
+        <span class="feat-tag">AUTO-DOWNLOAD</span>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-num">04 ──────</div>
+        <div class="feat-title">完全开源<br>欢迎贡献</div>
+        <p class="feat-desc">MIT 协议，完整源码在 GitHub。Alpha 阶段正是需要你的时候。</p>
+        <span class="feat-tag g">MIT · OPEN</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ALPHA STATUS -->
+  <section class="alpha-section" id="status">
+    <div class="alpha-inner reveal">
+      <div class="alpha-cell">
+        <div class="alpha-cell-lbl">当前版本</div>
+        <div class="alpha-cell-val warn">Alpha 0.1</div>
+        <div class="alpha-cell-sub">内部版本号 · 持续迭代</div>
+      </div>
+      <div class="alpha-cell">
+        <div class="alpha-cell-lbl">开发状态</div>
+        <div class="alpha-cell-val ok">进行中</div>
+        <div class="alpha-cell-sub">核心功能开发阶段</div>
+      </div>
+      <div class="alpha-cell">
+        <div class="alpha-cell-lbl">GitHub 仓库</div>
+        <div class="alpha-cell-sub" style="margin-top:0.3rem;">
+          <a href="https://github.com/yuanquanya/Net-Minecraft-Lancher" target="_blank"
+             style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--lime);text-decoration:none;line-height:2.2;">
+            yuanquanya/<br>Net-Minecraft-Lancher
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="roadmap reveal">
+      <div class="roadmap-lbl">// 开发进度概览</div>
+      <div class="roadmap-items">
+        <div class="roadmap-item">
+          <span class="ri-name">C++ HTTP 服务核心</span>
+          <div class="ri-bar"><div class="ri-fill" style="width:70%"></div></div>
+          <span class="ri-pct">70%</span>
+        </div>
+        <div class="roadmap-item">
+          <span class="ri-name">HTML 前端界面</span>
+          <div class="ri-bar"><div class="ri-fill" style="width:55%"></div></div>
+          <span class="ri-pct">55%</span>
+        </div>
+        <div class="roadmap-item">
+          <span class="ri-name">Java 版本管理</span>
+          <div class="ri-bar"><div class="ri-fill w" style="width:30%"></div></div>
+          <span class="ri-pct">30%</span>
+        </div>
+        <div class="roadmap-item">
+          <span class="ri-name">账号系统</span>
+          <div class="ri-bar"><div class="ri-fill w" style="width:15%"></div></div>
+          <span class="ri-pct">15%</span>
+        </div>
+        <div class="roadmap-item">
+          <span class="ri-name">模组加载器支持</span>
+          <div class="ri-bar"><div class="ri-fill n" style="width:3%"></div></div>
+          <span class="ri-pct">计划中</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD -->
+  <section class="dl-section" id="download">
+    <div class="reveal">
+      <div class="dl-lbl">// 获取项目</div>
+      <div class="dl-title">Alpha 阶段<br>从源码开始</div>
+      <p class="dl-note">
+        当前版本 <code>Alpha 0.1</code> 为早期内部版本，
+        建议通过 GitHub 获取源码自行编译。
+        编译需要 C++17 及以上环境，CMake 3.20+，
+        具体依赖请参阅仓库 README。
+      </p>
+      <div class="dl-warn">
+        ⚠ Alpha 版本功能不完整，可能存在已知问题。<br>
+        欢迎提交 Issue 和 PR 帮助项目完善。
+      </div>
+    </div>
+
+    <div class="dl-options reveal">
+      <a href="https://github.com/yuanquanya/Net-Minecraft-Lancher" target="_blank" class="dl-btn">
+        <div class="dl-btn-info">
+          <span class="dl-btn-name">查看 GitHub 仓库</span>
+          <span class="dl-btn-meta">yuanquanya / Net-Minecraft-Lancher</span>
+        </div>
+        <div class="dl-btn-right">
+          <span class="dl-tag g">SOURCE</span>
+          <span class="dl-arr">▶▶</span>
+        </div>
+      </a>
+      <a href="https://github.com/yuanquanya/Net-Minecraft-Lancher/releases" target="_blank" class="dl-btn">
+        <div class="dl-btn-info">
+          <span class="dl-btn-name">Releases 页面</span>
+          <span class="dl-btn-meta">关注后续版本发布</span>
+        </div>
+        <div class="dl-btn-right">
+          <span class="dl-tag o">ALPHA</span>
+          <span class="dl-arr">▶▶</span>
+        </div>
+      </a>
+      <a href="https://github.com/yuanquanya/Net-Minecraft-Lancher/issues" target="_blank" class="dl-btn">
+        <div class="dl-btn-info">
+          <span class="dl-btn-name">提交 Issue / 反馈</span>
+          <span class="dl-btn-meta">bug 报告 · 功能建议 · 欢迎参与</span>
+        </div>
+        <div class="dl-btn-right">
+          <span class="dl-tag">ISSUES</span>
+          <span class="dl-arr">▶▶</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div>
+      <div class="footer-brand"><span>NMCL</span> — Net Minecraft Launcher</div>
+      <div class="footer-copy">© 2026 yuanquanya · MIT License</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:0.45rem;color:var(--stroke);margin-top:0.4rem;">Powered by AI</div>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/yuanquanya/Net-Minecraft-Lancher" target="_blank">GitHub</a>
+      <a href="https://github.com/yuanquanya/Net-Minecraft-Lancher/issues" target="_blank">Issues</a>
+      <a href="https://github.com/yuanquanya/Net-Minecraft-Lancher/releases" target="_blank">Releases</a>
+    </div>
+    <div class="footer-disc">
+      Not affiliated with Mojang or Microsoft.<br>
+      Minecraft is a trademark of Mojang Synergies AB.
+    </div>
+  </footer>
+
+  <script>
+    // 自定义光标
+    const cursor = document.getElementById('cursor');
+    const ring   = document.getElementById('cursorRing');
+    let mx=0, my=0, rx=0, ry=0;
+
+    document.addEventListener('mousemove', e => {
+      mx = e.clientX; my = e.clientY;
+      cursor.style.transform = `translate(${mx-3}px,${my-3}px)`;
+    });
+
+    (function loop(){
+      rx += (mx-rx-11)*0.1;
+      ry += (my-ry-11)*0.1;
+      ring.style.transform = `translate(${rx}px,${ry}px)`;
+      requestAnimationFrame(loop);
+    })();
+
+    document.querySelectorAll('a,button').forEach(el => {
+      el.addEventListener('mouseenter', ()=>ring.style.opacity='0.15');
+      el.addEventListener('mouseleave', ()=>ring.style.opacity='1');
+    });
+
+    // Reveal
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach((e,i)=>{ if(e.isIntersecting) setTimeout(()=>e.target.classList.add('visible'), i*60); });
+    }, {threshold:0.08});
+    document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+
+    // 特性卡片
+    const cards = [...document.querySelectorAll('.feat-card')];
+    const cobs = new IntersectionObserver(entries => {
+      entries.forEach(e=>{
+        if(e.isIntersecting){
+          const i = cards.indexOf(e.target);
+          setTimeout(()=>{ e.target.style.opacity='1'; e.target.style.transform='none'; }, i*90);
+        }
+      });
+    }, {threshold:0.05});
+    cards.forEach(c=>{
+      c.style.cssText += 'opacity:0;transform:translateY(14px);transition:opacity 0.5s ease,transform 0.5s ease,background 0.25s;';
+      cobs.observe(c);
+    });
+  </script>
+</body>
+</html>
