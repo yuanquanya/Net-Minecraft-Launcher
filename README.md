@@ -1,9 +1,9 @@
-# Simple MC Launcher
+# Net-Minecraft-Launcher
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 
-**Net Minecraft Launcher** 是一个基于 C++ (Qt) 和 Web 技术构建的现代化、轻量级 Minecraft 启动器。它结合了原生应用的性能与 Web界面的灵活性，旨在提供快速、纯粹的游戏启动体验。
+**Net-Minecraft-Launcher** 是一个基于 C++ (Qt) 和 Web 技术构建的现代化、轻量级 Minecraft 启动器。它结合了原生应用的性能与 Web界面的灵活性，旨在提供快速、纯粹的游戏启动体验。
 
 
 ## ✨ 主要特性 (Features)

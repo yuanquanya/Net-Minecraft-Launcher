@@ -39,18 +39,41 @@ const char* INDEX_HTML = R"html(
             display: flex;
             overflow: hidden;
             user-select: none;
+            cursor: none; /* 隐藏系统光标 */
         }
 
-        /* 扫描线 — position:fixed + pointer-events:none，不影响任何布局 */
+        /* ══════════════════════════════════════
+           自定义光标（来自 landing page）
+           方块点 + 滞后追踪环
+        ══════════════════════════════════════ */
+        .cursor {
+            position: fixed;
+            width: 6px; height: 6px;
+            background: var(--lime);
+            pointer-events: none;
+            z-index: 99999;
+            /* transform 由 JS 写入，不需要 transition，保持即时响应 */
+        }
+
+        .cursor-ring {
+            position: fixed;
+            width: 22px; height: 22px;
+            border: 1px solid rgba(163,230,53,0.5);
+            pointer-events: none;
+            z-index: 99998;
+            /* transform 由 rAF 循环写入，自带缓动 */
+            transition: opacity 0.2s;
+        }
+
+        /* 扫描线 */
         .scanlines {
             position: fixed; inset: 0;
             background: repeating-linear-gradient(
                 to bottom, transparent 0px, transparent 3px,
-                rgba(0,0,0,0.08) 3px, rgba(0,0,0,0.08) 4px
+                rgba(0,0,0,0.09) 3px, rgba(0,0,0,0.09) 4px
             );
             pointer-events: none;
             z-index: 9000;
-            will-change: auto; /* 不需要提升，固定不动 */
         }
 
         /* ══ SIDEBAR ══ */
@@ -65,7 +88,6 @@ const char* INDEX_HTML = R"html(
             z-index: 200;
             flex-shrink: 0;
             overflow: hidden;
-            /* 只在 sidebar 宽度变化时 transition，不影响面板 */
             transition: width 0.28s cubic-bezier(0.4,0,0.2,1);
         }
 
@@ -75,8 +97,7 @@ const char* INDEX_HTML = R"html(
             width: 100%; height: 48px;
             display: flex; align-items: center;
             border-bottom: 1px solid var(--stroke);
-            padding: 0 0 0 18px; gap: 10px;
-            flex-shrink: 0;
+            padding: 0 0 0 18px; gap: 10px; flex-shrink: 0;
         }
 
         .sb-brand-icon {
@@ -89,8 +110,7 @@ const char* INDEX_HTML = R"html(
             font-family: var(--font-m);
             font-size: 0.58rem; color: var(--muted);
             letter-spacing: 0.1em; white-space: nowrap;
-            opacity: 0;
-            transition: opacity 0.2s 0.1s;
+            opacity: 0; transition: opacity 0.2s 0.1s;
         }
 
         .sidebar.expanded .sb-brand-label { opacity: 1; }
@@ -104,7 +124,7 @@ const char* INDEX_HTML = R"html(
             width: 100%; height: 44px;
             display: flex; align-items: center;
             padding: 0 0 0 16px; gap: 12px;
-            cursor: pointer; color: var(--muted);
+            color: var(--muted);
             border-left: 2px solid transparent;
             transition: color 0.15s, border-color 0.15s, background 0.15s;
             flex-shrink: 0;
@@ -134,7 +154,7 @@ const char* INDEX_HTML = R"html(
             width: 100%; height: 40px;
             display: flex; align-items: center;
             padding: 0 0 0 17px; gap: 11px;
-            cursor: pointer; color: var(--stroke);
+            color: var(--stroke);
             border-top: 1px solid var(--stroke);
             transition: color 0.15s, background 0.15s; flex-shrink: 0;
         }
@@ -156,13 +176,12 @@ const char* INDEX_HTML = R"html(
 
         .sidebar.expanded .sb-toggle-label { opacity: 1; }
 
-        /* ══ MAIN ══ */
+        /* ══ MAIN CANVAS ══ */
         .main-content {
             flex: 1; position: relative; overflow: hidden;
             background: radial-gradient(ellipse at 70% 30%, rgba(24,32,20,0.55) 0%, transparent 60%), var(--dark);
         }
 
-        /* 斜纹背景 — 静态，用 ::before 避免额外 DOM */
         .main-content::before {
             content: ''; position: absolute; inset: 0;
             background: repeating-linear-gradient(
@@ -177,7 +196,7 @@ const char* INDEX_HTML = R"html(
             font-family: var(--font-px);
             font-size: clamp(1.6rem, 4.5vw, 3rem);
             color: var(--stroke); text-align: center;
-            line-height: 1.8; pointer-events: none; opacity: 0.45;
+            line-height: 1.8; pointer-events: none; opacity: 0.4;
         }
 
         .watermark-sub {
@@ -188,40 +207,37 @@ const char* INDEX_HTML = R"html(
         }
 
         /* ══════════════════════════════════════════
-           FLOAT PANEL
-           关键：left/top 确定「停靠位置」，
-           拖拽时用 transform:translate() 做位移，
-           松手再 commit 回 left/top，transform 归零。
-           这样拖拽全程不触发 layout reflow。
+           FLOAT PANEL — position:fixed
+           坐标系 = 整个视口，可以自由拖到任何位置
         ══════════════════════════════════════════ */
         .float-panel {
-            position: absolute;
-            /* left/top 是停靠坐标，由 JS 写入 */
+            position: fixed;           /* ← 关键：相对视口定位 */
             background: var(--panel);
             border: 1px solid var(--stroke);
-            display: none; flex-direction: column;
+            display: none;
+            flex-direction: column;
             z-index: 500;
-            box-shadow: 0 20px 56px rgba(0,0,0,0.55);
-            /* 只有动画类 .animating 才启用 transition，正常状态无 transition */
+            box-shadow: 0 20px 56px rgba(0,0,0,0.6);
             will-change: transform;
             overflow: hidden;
+            min-width: 220px;
+            min-height: 80px;
         }
 
         .float-panel.visible { display: flex; }
         .float-panel.on-top  { z-index: 600; }
 
-        /* 顶角发光 — 伪元素，静态，不影响性能 */
+        /* 顶角发光边 */
         .float-panel::before {
             content: ''; position: absolute; inset: -1px;
             background: linear-gradient(
-                135deg,
-                rgba(163,230,53,0.13) 0%, transparent 35%,
+                135deg, rgba(163,230,53,0.12) 0%, transparent 35%,
                 transparent 65%, rgba(234,88,12,0.07) 100%
             );
             pointer-events: none; z-index: -1;
         }
 
-        /* 动画类：仅在 maximize/minimize toggle 时挂上，动画完移除 */
+        /* 全屏/最小化过渡，仅在这两个操作时挂上 */
         .float-panel.animating {
             transition:
                 left   0.26s cubic-bezier(0.4,0,0.2,1),
@@ -230,43 +246,38 @@ const char* INDEX_HTML = R"html(
                 height 0.26s cubic-bezier(0.4,0,0.2,1);
         }
 
-        /* 打开入场动画 */
         @keyframes panelIn {
-            from { opacity: 0; transform: translateY(10px) scale(0.97); }
-            to   { opacity: 1; transform: none; }
+            from { opacity:0; transform: translateY(10px) scale(0.97); }
+            to   { opacity:1; transform: none; }
         }
 
         .float-panel.minimized .panel-body,
         .float-panel.minimized .resize-handle { display: none !important; }
-
         .float-panel.minimized { height: auto !important; min-height: 0; }
 
-        /* ── panel bar ── */
+        /* ── 标题栏 ── */
         .panel-bar {
             height: 38px; padding: 0 10px 0 12px;
             border-bottom: 1px solid var(--stroke);
             background: var(--mid);
             display: flex; align-items: center; gap: 7px;
-            cursor: grab; flex-shrink: 0; z-index: 2;
+            flex-shrink: 0; z-index: 2;
         }
-
-        .panel-bar:active { cursor: grabbing; }
 
         /* ── 交通灯 ── */
         .tl-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
         .tl {
             width: 11px; height: 11px; border-radius: 50%;
-            cursor: pointer; flex-shrink: 0; position: relative;
+            flex-shrink: 0; position: relative;
             transition: filter 0.12s, transform 0.1s;
         }
 
         .tl:hover  { filter: brightness(1.3); transform: scale(1.15); }
         .tl:active { transform: scale(0.88); }
-
-        .tl.red    { background: #ef4444; box-shadow: 0 0 5px rgba(239,68,68,0.5); }
-        .tl.yellow { background: #f59e0b; box-shadow: 0 0 5px rgba(245,158,11,0.5); }
-        .tl.green  { background: var(--lime); box-shadow: 0 0 5px rgba(163,230,53,0.5); }
+        .tl.red    { background: #ef4444; box-shadow: 0 0 5px rgba(239,68,68,0.45); }
+        .tl.yellow { background: #f59e0b; box-shadow: 0 0 5px rgba(245,158,11,0.45); }
+        .tl.green  { background: var(--lime); box-shadow: 0 0 5px rgba(163,230,53,0.45); }
 
         .tl::after {
             content: ''; position: absolute; inset: 0;
@@ -277,9 +288,9 @@ const char* INDEX_HTML = R"html(
             line-height: 11px; text-align: center;
         }
 
-        .tl-wrap:hover .tl.red::after    { opacity: 1; content: '✕'; }
-        .tl-wrap:hover .tl.yellow::after { opacity: 1; content: '−'; }
-        .tl-wrap:hover .tl.green::after  { opacity: 1; content: '⤢'; font-size: 6px; }
+        .tl-wrap:hover .tl.red::after    { opacity:1; content:'✕'; }
+        .tl-wrap:hover .tl.yellow::after { opacity:1; content:'−'; }
+        .tl-wrap:hover .tl.green::after  { opacity:1; content:'⤢'; font-size:6px; }
 
         .panel-title {
             font-family: var(--font-m); font-size: 0.57rem;
@@ -288,33 +299,28 @@ const char* INDEX_HTML = R"html(
             overflow: hidden; text-overflow: ellipsis;
         }
 
-        /* ── panel body ── */
         .panel-body { padding: 1.4rem; overflow-y: auto; flex: 1; min-height: 0; }
 
         /* ══ RESIZE HANDLES ══ */
         .resize-handle { position: absolute; z-index: 10; }
+        .resize-handle.n  { top:0;    left:8px;  right:8px;  height:5px;  cursor:n-resize; }
+        .resize-handle.s  { bottom:0; left:8px;  right:8px;  height:5px;  cursor:s-resize; }
+        .resize-handle.e  { right:0;  top:8px;   bottom:8px; width:5px;   cursor:e-resize; }
+        .resize-handle.w  { left:0;   top:8px;   bottom:8px; width:5px;   cursor:w-resize; }
+        .resize-handle.ne { top:0;    right:0;   width:12px; height:12px; cursor:ne-resize; }
+        .resize-handle.nw { top:0;    left:0;    width:12px; height:12px; cursor:nw-resize; }
+        .resize-handle.se { bottom:0; right:0;   width:12px; height:12px; cursor:se-resize; }
+        .resize-handle.sw { bottom:0; left:0;    width:12px; height:12px; cursor:sw-resize; }
 
-        .resize-handle.n  { top: 0;    left: 8px;  right: 8px;  height: 5px; cursor: n-resize; }
-        .resize-handle.s  { bottom: 0; left: 8px;  right: 8px;  height: 5px; cursor: s-resize; }
-        .resize-handle.e  { right: 0;  top: 8px;   bottom: 8px; width: 5px;  cursor: e-resize; }
-        .resize-handle.w  { left: 0;   top: 8px;   bottom: 8px; width: 5px;  cursor: w-resize; }
-        .resize-handle.ne { top: 0;    right: 0;   width: 12px; height: 12px; cursor: ne-resize; }
-        .resize-handle.nw { top: 0;    left: 0;    width: 12px; height: 12px; cursor: nw-resize; }
-        .resize-handle.se { bottom: 0; right: 0;   width: 12px; height: 12px; cursor: se-resize; }
-        .resize-handle.sw { bottom: 0; left: 0;    width: 12px; height: 12px; cursor: sw-resize; }
-
-        /* 角落像素装饰 */
-        .resize-handle.se::after, .resize-handle.sw::after,
-        .resize-handle.ne::after, .resize-handle.nw::after {
-            content: ''; position: absolute;
-            width: 5px; height: 5px;
-            border-color: var(--muted); border-style: solid; opacity: 0.35;
+        .resize-handle.se::after,.resize-handle.sw::after,
+        .resize-handle.ne::after,.resize-handle.nw::after {
+            content:''; position:absolute; width:5px; height:5px;
+            border-color:var(--muted); border-style:solid; opacity:0.35;
         }
-
-        .resize-handle.se::after { bottom: 2px; right: 2px; border-width: 0 1px 1px 0; }
-        .resize-handle.sw::after { bottom: 2px; left: 2px;  border-width: 0 0 1px 1px; }
-        .resize-handle.ne::after { top: 2px;    right: 2px; border-width: 1px 1px 0 0; }
-        .resize-handle.nw::after { top: 2px;    left: 2px;  border-width: 1px 0 0 1px; }
+        .resize-handle.se::after { bottom:2px; right:2px; border-width:0 1px 1px 0; }
+        .resize-handle.sw::after { bottom:2px; left:2px;  border-width:0 0 1px 1px; }
+        .resize-handle.ne::after { top:2px;    right:2px; border-width:1px 1px 0 0; }
+        .resize-handle.nw::after { top:2px;    left:2px;  border-width:1px 0 0 1px; }
 
         /* ══ FORM ══ */
         .form-group { margin-bottom: 1.3rem; }
@@ -322,150 +328,292 @@ const char* INDEX_HTML = R"html(
         .flabel {
             display: flex; align-items: center; gap: 0.4rem;
             font-family: var(--font-m); font-size: 0.56rem;
-            color: var(--muted); margin-bottom: 0.5rem;
+            color: var(--muted); margin-bottom: 0.6rem;
             letter-spacing: 0.15em; text-transform: uppercase;
         }
+        .flabel::before { content:'//'; color:var(--stroke); }
 
-        .flabel::before { content: '//'; color: var(--stroke); }
+        /* ── 自定义版本下拉 ── */
+        .px-select { position: relative; width: 100%; }
 
-        .input-wrapper {
-            position: relative; background: var(--dark);
+        .px-select-box {
+            width: 100%; background: var(--dark);
             border: 1px solid var(--stroke);
-            transition: border-color 0.2s;
+            padding: 0.6rem 2.4rem 0.6rem 0.9rem;
+            font-family: var(--font-m); font-size: 0.75rem;
+            color: var(--text); letter-spacing: 0.05em;
+            display: flex; align-items: center;
+            position: relative; min-height: 38px;
+            transition: border-color 0.15s;
         }
 
-        .input-wrapper:focus-within { border-color: var(--lime-bdr); }
-
-        .input-wrapper::after {
-            content: '▼'; font-size: 9px; color: var(--muted);
-            position: absolute; right: 12px; top: 50%;
-            transform: translateY(-50%); pointer-events: none;
+        .px-select-box::after {
+            content: ''; position: absolute;
+            right: 11px; top: 50%;
+            transform: translateY(-50%);
+            width: 0; height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid var(--muted);
+            transition: border-color 0.15s, transform 0.18s;
         }
 
-        .input-wrapper.text-input::after { content: none; }
-
-        input[type="text"], select {
-            width: 100%; background: transparent; border: none;
-            color: var(--text); padding: 0.65rem 1rem;
-            font-size: 0.78rem; font-family: var(--font-m);
-            outline: none; letter-spacing: 0.05em;
+        .px-select.open .px-select-box {
+            border-color: var(--lime-bdr);
         }
 
-        select { appearance: none; cursor: pointer; }
-        option { background: #1a2318; color: var(--text); }
-
-        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; margin-top: 4px; }
-
-        input[type=range]::-webkit-slider-runnable-track { height: 3px; background: var(--stroke); }
-
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 13px; height: 13px;
-            border-radius: 0; background: var(--lime); cursor: pointer;
-            margin-top: -5px; transition: transform 0.1s;
-            clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 3px, 100% 100%, 3px 100%, 0 calc(100% - 3px));
+        .px-select.open .px-select-box::after {
+            border-top-color: var(--lime);
+            transform: translateY(-50%) rotate(180deg);
         }
 
-        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        .px-select-val { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-        .mem-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-        #memValue { font-family: var(--font-m); font-size: 0.63rem; color: var(--lime); font-weight: 700; }
-
-        /* ── Launch button ── */
-        #launchBtn {
-            width: 100%; padding: 0.9rem; border: none;
-            background: var(--lime); color: var(--dark);
-            font-family: var(--font-px); font-size: 0.5rem;
-            letter-spacing: 0.08em; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-            clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
-            transition: filter 0.12s, transform 0.08s; position: relative;
+        .px-dropdown {
+            position: absolute;
+            top: calc(100% + 2px); left: 0; right: 0;
+            background: var(--mid);
+            border: 1px solid var(--lime-bdr);
+            max-height: 180px; overflow-y: auto;
+            z-index: 9999; display: none;
         }
 
-        #launchBtn::after {
-            content: ''; position: absolute; inset: 0;
-            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+        .px-dropdown::-webkit-scrollbar { width: 3px; }
+        .px-dropdown::-webkit-scrollbar-track { background: var(--dark); }
+        .px-dropdown::-webkit-scrollbar-thumb { background: var(--stroke); }
+
+        .px-select.open .px-dropdown { display: block; }
+
+        .px-option {
+            padding: 0.55rem 0.9rem;
+            font-family: var(--font-m); font-size: 0.73rem;
+            color: var(--muted); letter-spacing: 0.04em;
+            display: flex; align-items: center; gap: 0.6rem;
+            border-bottom: 1px solid var(--stroke);
+            transition: background 0.1s, color 0.1s;
         }
 
-        #launchBtn:hover:not(:disabled) { filter: brightness(1.1); transform: translate(-1px,-1px); }
-        #launchBtn:active:not(:disabled) { transform: none; }
+        .px-option:last-child { border-bottom: none; }
 
-        #launchBtn:disabled {
-            background: var(--mid); color: var(--muted);
-            cursor: not-allowed; clip-path: none;
-            border: 1px solid var(--stroke);
+        .px-option::before {
+            content: ''; width: 6px; height: 6px;
+            background: var(--stroke); flex-shrink: 0;
+            transition: background 0.1s;
         }
 
-        .status-msg {
-            margin-top: 0.9rem; font-family: var(--font-m);
-            font-size: 0.63rem; color: var(--muted);
-            min-height: 18px; display: flex; align-items: center; gap: 0.5rem;
+        .px-option:hover { background: rgba(163,230,53,0.06); color: var(--text); }
+        .px-option:hover::before { background: var(--muted); }
+
+        .px-option.selected { color: var(--lime); background: var(--lime-bg); }
+        .px-option.selected::before { background: var(--lime); }
+
+        .px-opt-tag {
+            margin-left: auto;
+            font-family: var(--font-px); font-size: 0.3rem;
+            color: var(--stroke); border: 1px solid var(--stroke);
+            padding: 0.1rem 0.3rem; letter-spacing: 0.05em; flex-shrink: 0;
         }
 
-        .status-msg::before { content: '$'; color: var(--lime); flex-shrink: 0; }
+        .px-opt-tag.release  { border-color: rgba(163,230,53,0.3); color: rgba(163,230,53,0.6); }
+        .px-opt-tag.snapshot { border-color: rgba(245,158,11,0.3); color: rgba(245,158,11,0.6); }
 
-        .user-placeholder { text-align: center; padding: 2rem 1rem; }
-        .user-placeholder-title { font-family: var(--font-px); font-size: 0.55rem; color: var(--muted); margin-bottom: 0.8rem; line-height: 1.8; }
-        .user-placeholder-sub   { font-family: var(--font-m); font-size: 0.62rem; color: var(--stroke); letter-spacing: 0.15em; }
-
-        /* ══ JAVA MODAL ══ */
-        .modal {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
-            justify-content: center; align-items: center; z-index: 9000;
-        }
-
-        .modal-content {
-            background: var(--panel); border: 1px solid var(--stroke);
-            width: 360px; position: relative;
-        }
-
-        .modal-content::before {
-            content: ''; position: absolute; inset: -1px;
-            background: linear-gradient(135deg, rgba(234,88,12,0.18) 0%, transparent 40%);
-            z-index: -1;
-        }
-
-        .modal-header {
-            padding: 0.5rem 1rem; border-bottom: 1px solid var(--stroke);
-            background: rgba(234,88,12,0.07);
+        .px-loading {
+            padding: 0.8rem 0.9rem;
+            font-family: var(--font-m); font-size: 0.65rem; color: var(--muted);
             display: flex; align-items: center; gap: 0.5rem;
         }
 
-        .modal-header-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rust); }
-        .modal-title { font-family: var(--font-m); font-size: 0.6rem; color: var(--rust); letter-spacing: 0.1em; }
-        .modal-body-wrap { padding: 1.3rem; }
-        .modal-body { font-family: var(--font-m); font-size: 0.68rem; color: var(--muted); margin-bottom: 1rem; line-height: 2; }
-        .modal-body b { color: var(--text); font-weight: 400; }
-        .modal-actions { display: flex; gap: 10px; margin-top: 1.1rem; }
+        .px-loading::before {
+            content: ''; width: 6px; height: 6px;
+            background: var(--lime);
+            animation: px-blink 0.8s step-end infinite;
+        }
+
+        @keyframes px-blink { 50% { opacity:0; } }
+
+        /* ── 文本输入框 ── */
+        .px-input-wrap {
+            position: relative; background: var(--dark);
+            border: 1px solid var(--stroke);
+            display: flex; align-items: center;
+            transition: border-color 0.15s;
+        }
+
+        .px-input-wrap:focus-within { border-color: var(--lime-bdr); }
+
+        .px-input-wrap::before {
+            content: '▶'; font-size: 0.55rem; color: var(--stroke);
+            padding: 0 0.5rem 0 0.8rem; flex-shrink: 0;
+            transition: color 0.15s; pointer-events: none;
+        }
+
+        .px-input-wrap:focus-within::before { color: var(--lime); }
+
+        .px-input {
+            flex: 1; background: transparent; border: none; outline: none;
+            color: var(--text); padding: 0.62rem 0.8rem 0.62rem 0;
+            font-family: var(--font-m); font-size: 0.78rem;
+            letter-spacing: 0.05em; caret-color: var(--lime);
+        }
+
+        /* ── 内存滑块 ── */
+        .mem-row {
+            display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 0.7rem;
+        }
+
+        .mem-val {
+            font-family: var(--font-px); font-size: 0.42rem;
+            color: var(--lime); letter-spacing: 0.05em;
+        }
+
+        .px-slider-wrap {
+            position: relative; width: 100%; height: 20px;
+            display: flex; align-items: center;
+        }
+
+        .px-track { position: absolute; left:0; right:0; height:3px; background: var(--stroke); }
+        .px-fill  { position: absolute; left:0; height:3px; background: var(--lime); pointer-events:none; }
+
+        .px-ticks { position: absolute; left:0; right:0; top:12px; pointer-events:none; }
+
+        .px-tick {
+            position: absolute;
+            font-family: var(--font-px); font-size: 0.22rem;
+            color: var(--stroke); transform: translateX(-50%);
+        }
+
+        .px-range {
+            position: absolute; left:0; right:0; width:100%;
+            margin: 0; -webkit-appearance:none;
+            background: transparent; border:none; outline:none;
+            height: 20px; z-index: 2; opacity: 0;
+        }
+
+        .px-thumb {
+            position: absolute;
+            width: 10px; height: 16px;
+            background: var(--lime); top:50%; transform:translateY(-50%);
+            clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 3px, 100% 100%, 3px 100%, 0 calc(100% - 3px));
+            pointer-events:none; z-index:1;
+            box-shadow: 0 0 6px rgba(163,230,53,0.4);
+            transition: filter 0.1s;
+        }
+
+        .px-slider-wrap:hover .px-thumb { filter: brightness(1.2); }
+
+        /* ── 启动按钮 ── */
+        .px-launch-btn {
+            width: 100%; padding: 0.9rem; border: none;
+            background: var(--lime); color: var(--dark);
+            font-family: var(--font-px); font-size: 0.5rem;
+            letter-spacing: 0.08em;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+            transition: filter 0.12s, transform 0.08s;
+            position: relative; overflow: hidden;
+        }
+
+        .px-launch-btn::after {
+            content:''; position:absolute; inset:0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+        }
+
+        .px-launch-btn::before {
+            content:''; position:absolute;
+            top:0; left:-100%; width:60%; height:100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+            transform: skewX(-15deg);
+        }
+
+        .px-launch-btn:hover:not(:disabled)::before { animation: px-scan 0.45s ease; }
+        @keyframes px-scan { to { left:160%; } }
+
+        .px-launch-btn:hover:not(:disabled) { filter:brightness(1.1); transform:translate(-1px,-1px); }
+        .px-launch-btn:active:not(:disabled) { transform:none; }
+        .px-launch-btn:disabled {
+            background: var(--mid); color: var(--muted);
+            clip-path:none; border:1px solid var(--stroke);
+        }
+
+        /* ── 状态行 ── */
+        .status-msg {
+            margin-top: 0.9rem; font-family: var(--font-m);
+            font-size: 0.63rem; color: var(--muted);
+            min-height: 18px; display:flex; align-items:center; gap:0.5rem;
+        }
+
+        .status-msg::before { content:'$'; color:var(--lime); flex-shrink:0; }
+
+        /* 用户占位 */
+        .user-placeholder { text-align:center; padding:2rem 1rem; }
+        .user-placeholder-title { font-family:var(--font-px); font-size:0.55rem; color:var(--muted); margin-bottom:0.8rem; line-height:1.8; }
+        .user-placeholder-sub   { font-family:var(--font-m); font-size:0.62rem; color:var(--stroke); letter-spacing:0.15em; }
+
+        /* ══ JAVA MODAL ══ */
+        .modal {
+            display:none; position:fixed; inset:0;
+            background:rgba(0,0,0,0.7); backdrop-filter:blur(5px);
+            justify-content:center; align-items:center; z-index:9000;
+        }
+
+        .modal-content {
+            background:var(--panel); border:1px solid var(--stroke);
+            width:360px; position:relative;
+        }
+
+        .modal-content::before {
+            content:''; position:absolute; inset:-1px;
+            background:linear-gradient(135deg, rgba(234,88,12,0.18) 0%, transparent 40%);
+            z-index:-1;
+        }
+
+        .modal-header {
+            padding:0.5rem 1rem; border-bottom:1px solid var(--stroke);
+            background:rgba(234,88,12,0.07);
+            display:flex; align-items:center; gap:0.5rem;
+        }
+
+        .modal-header-dot { width:7px; height:7px; border-radius:50%; background:var(--rust); }
+        .modal-title { font-family:var(--font-m); font-size:0.6rem; color:var(--rust); letter-spacing:0.1em; }
+        .modal-body-wrap { padding:1.3rem; }
+        .modal-body { font-family:var(--font-m); font-size:0.68rem; color:var(--muted); margin-bottom:1rem; line-height:2; }
+        .modal-body b { color:var(--text); font-weight:400; }
+        .modal-actions { display:flex; gap:10px; margin-top:1.1rem; }
 
         .modal-btn {
-            flex: 1; padding: 0.65rem; border: none;
-            font-family: var(--font-m); font-size: 0.63rem;
-            letter-spacing: 0.08em; cursor: pointer;
-            transition: filter 0.12s, background 0.12s;
+            flex:1; padding:0.65rem; border:none;
+            font-family:var(--font-m); font-size:0.63rem;
+            letter-spacing:0.08em;
+            transition:filter 0.12s, background 0.12s;
         }
 
         .btn-primary {
-            background: var(--lime); color: var(--dark); font-weight: 700;
-            clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px));
+            background:var(--lime); color:var(--dark); font-weight:700;
+            clip-path:polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px));
         }
 
-        .btn-primary:hover { filter: brightness(1.08); }
-        .btn-secondary { background: transparent; border: 1px solid var(--stroke); color: var(--muted); }
-        .btn-secondary:hover { border-color: var(--muted); color: var(--text); }
+        .btn-primary:hover { filter:brightness(1.08); }
+        .btn-secondary { background:transparent; border:1px solid var(--stroke); color:var(--muted); }
+        .btn-secondary:hover { border-color:var(--muted); color:var(--text); }
 
-        .java-prog-row { display: flex; justify-content: space-between; margin-bottom: 0.45rem; }
-        #javaStatusText { font-family: var(--font-m); font-size: 0.6rem; color: var(--muted); }
-        #javaPercent    { font-family: var(--font-px); font-size: 0.45rem; color: var(--lime); }
-        .progress-bar   { height: 3px; background: var(--stroke); overflow: hidden; }
-        .progress-fill  { height: 100%; background: var(--lime); width: 0%; transition: width 0.3s; }
+        .java-prog-row { display:flex; justify-content:space-between; margin-bottom:0.45rem; }
+        #javaStatusText { font-family:var(--font-m); font-size:0.6rem; color:var(--muted); }
+        #javaPercent    { font-family:var(--font-px); font-size:0.45rem; color:var(--lime); }
+        .progress-bar   { height:3px; background:var(--stroke); overflow:hidden; }
+        .progress-fill  { height:100%; background:var(--lime); width:0%; transition:width 0.3s; }
 
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: var(--dark); }
-        ::-webkit-scrollbar-thumb { background: var(--stroke); }
+        ::-webkit-scrollbar { width:4px; }
+        ::-webkit-scrollbar-track { background:var(--dark); }
+        ::-webkit-scrollbar-thumb { background:var(--stroke); }
     </style>
 </head>
 <body>
+
+<!-- 自定义光标 -->
+<div class="cursor"      id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
 <div class="scanlines"></div>
 
 <!-- ════ SIDEBAR ════ -->
@@ -506,104 +654,118 @@ const char* INDEX_HTML = R"html(
         NMCL
         <span class="watermark-sub">// Net Minecraft Launcher — Alpha 0.1</span>
     </div>
-
-    <!-- ── 启动面板 ── -->
-    <div class="float-panel" id="panel-play" style="left:80px;top:80px;width:380px;height:260px;">
-        <div class="panel-bar">
-            <div class="tl-wrap">
-                <div class="tl red"    onclick="closePanel('play')"    title="关闭"></div>
-                <div class="tl yellow" onclick="minimizePanel('play')" title="最小化/恢复"></div>
-                <div class="tl green"  onclick="maximizePanel('play')" title="全屏/恢复"></div>
-            </div>
-            <span class="panel-title">nmcl — 启动游戏</span>
-        </div>
-        <div class="panel-body">
-            <div class="form-group">
-                <label class="flabel">游戏版本</label>
-                <div class="input-wrapper">
-                    <select id="versionSelect"><option>正在加载版本...</option></select>
-                </div>
-            </div>
-            <button id="launchBtn" onclick="launchGame()">
-                <svg style="width:15px;height:15px;fill:currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                启动游戏
-            </button>
-            <div id="statusMsg" class="status-msg">准备就绪</div>
-        </div>
-        <div class="resize-handle n"  data-dir="n"></div>
-        <div class="resize-handle s"  data-dir="s"></div>
-        <div class="resize-handle e"  data-dir="e"></div>
-        <div class="resize-handle w"  data-dir="w"></div>
-        <div class="resize-handle ne" data-dir="ne"></div>
-        <div class="resize-handle nw" data-dir="nw"></div>
-        <div class="resize-handle se" data-dir="se"></div>
-        <div class="resize-handle sw" data-dir="sw"></div>
-    </div>
-
-    <!-- ── 设置面板 ── -->
-    <div class="float-panel" id="panel-settings" style="left:500px;top:80px;width:380px;height:260px;">
-        <div class="panel-bar">
-            <div class="tl-wrap">
-                <div class="tl red"    onclick="closePanel('settings')"    title="关闭"></div>
-                <div class="tl yellow" onclick="minimizePanel('settings')" title="最小化/恢复"></div>
-                <div class="tl green"  onclick="maximizePanel('settings')" title="全屏/恢复"></div>
-            </div>
-            <span class="panel-title">nmcl — 设置</span>
-        </div>
-        <div class="panel-body">
-            <div class="form-group">
-                <label class="flabel">离线用户名</label>
-                <div class="input-wrapper text-input">
-                    <input type="text" id="username" value="Steve" placeholder="输入你的用户名">
-                </div>
-            </div>
-            <div class="form-group">
-                <div class="mem-row">
-                    <label class="flabel" style="margin:0">内存分配</label>
-                    <span id="memValue">2048 MB</span>
-                </div>
-                <input type="range" id="memory" min="1024" max="8192" value="2048" step="128"
-                       oninput="document.getElementById('memValue').innerText=this.value+' MB'">
-            </div>
-        </div>
-        <div class="resize-handle n"  data-dir="n"></div>
-        <div class="resize-handle s"  data-dir="s"></div>
-        <div class="resize-handle e"  data-dir="e"></div>
-        <div class="resize-handle w"  data-dir="w"></div>
-        <div class="resize-handle ne" data-dir="ne"></div>
-        <div class="resize-handle nw" data-dir="nw"></div>
-        <div class="resize-handle se" data-dir="se"></div>
-        <div class="resize-handle sw" data-dir="sw"></div>
-    </div>
-
-    <!-- ── 用户面板 ── -->
-    <div class="float-panel" id="panel-user" style="left:240px;top:220px;width:320px;height:180px;">
-        <div class="panel-bar">
-            <div class="tl-wrap">
-                <div class="tl red"    onclick="closePanel('user')"    title="关闭"></div>
-                <div class="tl yellow" onclick="minimizePanel('user')" title="最小化/恢复"></div>
-                <div class="tl green"  onclick="maximizePanel('user')" title="全屏/恢复"></div>
-            </div>
-            <span class="panel-title">nmcl — 用户</span>
-        </div>
-        <div class="panel-body">
-            <div class="user-placeholder">
-                <div class="user-placeholder-title">// 用户资料</div>
-                <div class="user-placeholder-sub">即将推出...</div>
-            </div>
-        </div>
-        <div class="resize-handle n"  data-dir="n"></div>
-        <div class="resize-handle s"  data-dir="s"></div>
-        <div class="resize-handle e"  data-dir="e"></div>
-        <div class="resize-handle w"  data-dir="w"></div>
-        <div class="resize-handle ne" data-dir="ne"></div>
-        <div class="resize-handle nw" data-dir="nw"></div>
-        <div class="resize-handle se" data-dir="se"></div>
-        <div class="resize-handle sw" data-dir="sw"></div>
-    </div>
 </div>
 
-<!-- ════ Java 安装弹窗 ════ -->
+<!-- ════ FLOAT PANELS (fixed, 视口坐标) ════ -->
+
+<!-- 启动面板 -->
+<div class="float-panel" id="panel-play" style="left:120px;top:80px;width:360px;">
+    <div class="panel-bar">
+        <div class="tl-wrap">
+            <div class="tl red"    onclick="closePanel('play')"    title="关闭"></div>
+            <div class="tl yellow" onclick="minimizePanel('play')" title="最小化/恢复"></div>
+            <div class="tl green"  onclick="maximizePanel('play')" title="全屏/恢复"></div>
+        </div>
+        <span class="panel-title">nmcl — 启动游戏</span>
+    </div>
+    <div class="panel-body">
+        <div class="form-group">
+            <label class="flabel">游戏版本</label>
+            <div class="px-select" id="versionPxSelect">
+                <div class="px-select-box" onclick="toggleSelect('versionPxSelect')">
+                    <span class="px-select-val" id="versionDisplay">正在加载...</span>
+                </div>
+                <div class="px-dropdown" id="versionDropdown">
+                    <div class="px-loading">加载版本列表中</div>
+                </div>
+            </div>
+            <select id="versionSelect" style="display:none;"></select>
+        </div>
+
+        <button class="px-launch-btn" id="launchBtn" onclick="launchGame()">
+            <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            启动游戏
+        </button>
+        <div id="statusMsg" class="status-msg">准备就绪</div>
+    </div>
+    <div class="resize-handle n"  data-dir="n"></div>
+    <div class="resize-handle s"  data-dir="s"></div>
+    <div class="resize-handle e"  data-dir="e"></div>
+    <div class="resize-handle w"  data-dir="w"></div>
+    <div class="resize-handle ne" data-dir="ne"></div>
+    <div class="resize-handle nw" data-dir="nw"></div>
+    <div class="resize-handle se" data-dir="se"></div>
+    <div class="resize-handle sw" data-dir="sw"></div>
+</div>
+
+<!-- 设置面板 -->
+<div class="float-panel" id="panel-settings" style="left:520px;top:80px;width:360px;">
+    <div class="panel-bar">
+        <div class="tl-wrap">
+            <div class="tl red"    onclick="closePanel('settings')"></div>
+            <div class="tl yellow" onclick="minimizePanel('settings')"></div>
+            <div class="tl green"  onclick="maximizePanel('settings')"></div>
+        </div>
+        <span class="panel-title">nmcl — 设置</span>
+    </div>
+    <div class="panel-body">
+        <div class="form-group">
+            <label class="flabel">离线用户名</label>
+            <div class="px-input-wrap">
+                <input class="px-input" type="text" id="username" value="Steve" placeholder="输入用户名">
+            </div>
+        </div>
+        <div class="form-group">
+            <div class="mem-row">
+                <label class="flabel" style="margin:0">内存分配</label>
+                <span class="mem-val" id="memValue">2048 MB</span>
+            </div>
+            <div class="px-slider-wrap" id="memSliderWrap">
+                <div class="px-track"></div>
+                <div class="px-fill"  id="memFill"></div>
+                <div class="px-thumb" id="memThumb"></div>
+                <div class="px-ticks" id="memTicks"></div>
+                <input class="px-range" type="range" id="memory" min="1024" max="8192" value="2048" step="512">
+            </div>
+        </div>
+    </div>
+    <div class="resize-handle n"  data-dir="n"></div>
+    <div class="resize-handle s"  data-dir="s"></div>
+    <div class="resize-handle e"  data-dir="e"></div>
+    <div class="resize-handle w"  data-dir="w"></div>
+    <div class="resize-handle ne" data-dir="ne"></div>
+    <div class="resize-handle nw" data-dir="nw"></div>
+    <div class="resize-handle se" data-dir="se"></div>
+    <div class="resize-handle sw" data-dir="sw"></div>
+</div>
+
+<!-- 用户面板 -->
+<div class="float-panel" id="panel-user" style="left:280px;top:260px;width:300px;">
+    <div class="panel-bar">
+        <div class="tl-wrap">
+            <div class="tl red"    onclick="closePanel('user')"></div>
+            <div class="tl yellow" onclick="minimizePanel('user')"></div>
+            <div class="tl green"  onclick="maximizePanel('user')"></div>
+        </div>
+        <span class="panel-title">nmcl — 用户</span>
+    </div>
+    <div class="panel-body">
+        <div class="user-placeholder">
+            <div class="user-placeholder-title">// 用户资料</div>
+            <div class="user-placeholder-sub">即将推出...</div>
+        </div>
+    </div>
+    <div class="resize-handle n"  data-dir="n"></div>
+    <div class="resize-handle s"  data-dir="s"></div>
+    <div class="resize-handle e"  data-dir="e"></div>
+    <div class="resize-handle w"  data-dir="w"></div>
+    <div class="resize-handle ne" data-dir="ne"></div>
+    <div class="resize-handle nw" data-dir="nw"></div>
+    <div class="resize-handle se" data-dir="se"></div>
+    <div class="resize-handle sw" data-dir="sw"></div>
+</div>
+
+<!-- ════ Java 弹窗 ════ -->
 <div id="javaModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -611,7 +773,7 @@ const char* INDEX_HTML = R"html(
             <div class="modal-title">缺少 Java 运行环境</div>
         </div>
         <div class="modal-body-wrap">
-            <div class="modal-body" id="javaModalBody">
+            <div class="modal-body">
                 此版本需要 <b>Java <span id="targetJavaVer">8</span></b>。<br>
                 是否自动下载并安装？
             </div>
@@ -636,6 +798,136 @@ const char* INDEX_HTML = R"html(
 "use strict";
 
 // ══════════════════════════════════════════════
+//  自定义光标 — 方块点 + 滞后追踪环
+//  完全移植自 landing page index.html
+// ══════════════════════════════════════════════
+const cursor = document.getElementById('cursor');
+const ring   = document.getElementById('cursorRing');
+let mx = 0, my = 0, rx = 0, ry = 0;
+
+document.addEventListener('mousemove', e => {
+    mx = e.clientX; my = e.clientY;
+    // 方块点：即时跟随，偏移半个点大小使中心对齐
+    cursor.style.transform = `translate(${mx - 3}px,${my - 3}px)`;
+}, { passive: true });
+
+// 环：rAF 缓动追踪
+(function loop() {
+    rx += (mx - rx - 11) * 0.1;
+    ry += (my - ry - 11) * 0.1;
+    ring.style.transform = `translate(${rx}px,${ry}px)`;
+    requestAnimationFrame(loop);
+})();
+
+// 悬停可点击元素时环变暗
+function refreshCursorTargets() {
+    document.querySelectorAll('button, .nav-item, .tl, .px-option, .px-select-box, .sb-toggle, .modal-btn, .panel-bar').forEach(el => {
+        el.addEventListener('mouseenter', () => { ring.style.opacity = '0.15'; });
+        el.addEventListener('mouseleave', () => { ring.style.opacity = '1'; });
+    });
+}
+
+// ══════════════════════════════════════════════
+//  版本选择器
+// ══════════════════════════════════════════════
+let selectedVersion = null;
+
+function toggleSelect(id) {
+    const el = document.getElementById(id);
+    const wasOpen = el.classList.contains('open');
+    document.querySelectorAll('.px-select.open').forEach(s => s.classList.remove('open'));
+    if (!wasOpen) el.classList.add('open');
+}
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('.px-select')) {
+        document.querySelectorAll('.px-select.open').forEach(s => s.classList.remove('open'));
+    }
+});
+
+function buildVersionList(versions) {
+    const dropdown    = document.getElementById('versionDropdown');
+    const nativeSelect = document.getElementById('versionSelect');
+    const display     = document.getElementById('versionDisplay');
+    dropdown.innerHTML = '';
+    nativeSelect.innerHTML = '';
+
+    if (!versions || !versions.length) {
+        dropdown.innerHTML = '<div class="px-loading">未找到任何版本</div>';
+        return;
+    }
+
+    const releases  = versions.filter(v => v.type === 'release');
+    const snapshots = versions.filter(v => v.type === 'snapshot').slice(0, 5);
+
+    [...releases, ...snapshots].forEach((v, i) => {
+        const opt = document.createElement('div');
+        opt.className = 'px-option';
+        opt.dataset.val = v.id;
+        opt.textContent = v.id;
+
+        const tag = document.createElement('span');
+        tag.className = 'px-opt-tag ' + v.type;
+        tag.textContent = v.type === 'release' ? '正式版' : '快照';
+        opt.appendChild(tag);
+
+        opt.addEventListener('click', () => {
+            document.querySelectorAll('.px-option').forEach(o => o.classList.remove('selected'));
+            opt.classList.add('selected');
+            display.textContent = v.id;
+            selectedVersion = v.id;
+            nativeSelect.value = v.id;
+            document.querySelectorAll('.px-select.open').forEach(s => s.classList.remove('open'));
+        });
+
+        dropdown.appendChild(opt);
+
+        const nOpt = document.createElement('option');
+        nOpt.value = v.id; nOpt.text = v.id;
+        nativeSelect.appendChild(nOpt);
+
+        if (i === 0) {
+            opt.classList.add('selected');
+            display.textContent = v.id;
+            selectedVersion = v.id;
+        }
+    });
+
+    refreshCursorTargets();
+}
+
+// ══════════════════════════════════════════════
+//  内存滑块
+// ══════════════════════════════════════════════
+function initSlider() {
+    const range = document.getElementById('memory');
+    const fill  = document.getElementById('memFill');
+    const thumb = document.getElementById('memThumb');
+    const label = document.getElementById('memValue');
+    const ticks = document.getElementById('memTicks');
+    const min = parseInt(range.min), max = parseInt(range.max);
+
+    [['1G',1024],['2G',2048],['4G',4096],['6G',6144],['8G',8192]].forEach(([lbl, v]) => {
+        const s = document.createElement('span');
+        s.className = 'px-tick';
+        s.textContent = lbl;
+        s.style.left = ((v - min) / (max - min) * 100) + '%';
+        ticks.appendChild(s);
+    });
+
+    function update() {
+        const v = parseInt(range.value);
+        const pct = (v - min) / (max - min) * 100;
+        fill.style.width  = pct + '%';
+        thumb.style.left  = `calc(${pct}% - 5px)`;
+        label.textContent = (v / 1024).toFixed(1).replace('.0','') + ' GB (' + v + ' MB)';
+    }
+
+    range.addEventListener('input', update);
+    update();
+}
+
+// ══════════════════════════════════════════════
 //  SIDEBAR
 // ══════════════════════════════════════════════
 const sidebar = document.getElementById('sidebar');
@@ -648,14 +940,11 @@ function toggleSidebar() {
 // ══════════════════════════════════════════════
 //  PANEL STATE
 // ══════════════════════════════════════════════
-// 记录每个面板的停靠位置和尺寸（拖拽结束后 commit）
 const pState = {
-    play:     { maximized: false, minimized: false },
-    settings: { maximized: false, minimized: false },
-    user:     { maximized: false, minimized: false }
+    play:     { maximized:false, minimized:false },
+    settings: { maximized:false, minimized:false },
+    user:     { maximized:false, minimized:false }
 };
-
-const mc = document.getElementById('mainContent');
 
 function getPanel(n) { return document.getElementById('panel-' + n); }
 function getNav(n)   { return document.getElementById('nav-'   + n); }
@@ -665,25 +954,6 @@ function bringToFront(panel) {
     panel.classList.add('on-top');
 }
 
-// ── 读写面板的「停靠坐标」（inline style left/top）
-function getAnchor(p) {
-    return {
-        l: parseFloat(p.style.left)  || 0,
-        t: parseFloat(p.style.top)   || 0,
-        w: p.offsetWidth,
-        h: p.offsetHeight
-    };
-}
-
-function setAnchor(p, l, t, w, h) {
-    p.style.left = l + 'px';
-    p.style.top  = t + 'px';
-    if (w != null) p.style.width  = w + 'px';
-    if (h != null) p.style.height = h + 'px';
-    p.style.transform = '';
-}
-
-// ── 打开 ──
 function openPanel(name) {
     const p = getPanel(name);
     p.classList.add('visible');
@@ -691,49 +961,42 @@ function openPanel(name) {
     bringToFront(p);
     p.style.animation = 'panelIn 0.22s cubic-bezier(0.16,1,0.3,1)';
     p.addEventListener('animationend', () => p.style.animation = '', { once: true });
+    refreshCursorTargets();
 }
 
-// ── 关闭（红灯）──
 function closePanel(name) {
-    const p  = getPanel(name);
-    const st = pState[name];
-    // 如果在全屏/最小化状态，先恢复再关
+    const p = getPanel(name), st = pState[name];
     if (st.maximized) { p.classList.remove('maximized'); st.maximized = false; }
     if (st.minimized) { p.classList.remove('minimized'); st.minimized = false; }
     p.classList.remove('visible');
     getNav(name).classList.remove('active');
 }
 
-// ── 最小化（黄灯，toggle）──
 function minimizePanel(name) {
-    const p  = getPanel(name);
-    const st = pState[name];
+    const p = getPanel(name), st = pState[name];
     if (st.minimized) {
-        p.classList.remove('minimized');
-        st.minimized = false;
+        p.classList.remove('minimized'); st.minimized = false;
     } else {
-        if (st.maximized) { restoreMax(p, name); }
-        p.classList.add('minimized');
-        st.minimized = true;
+        if (st.maximized) restoreMax(p, name);
+        p.classList.add('minimized'); st.minimized = true;
     }
 }
 
-// ── 全屏（绿灯，toggle）──
 function maximizePanel(name) {
-    const p  = getPanel(name);
-    const st = pState[name];
+    const p = getPanel(name), st = pState[name];
     if (st.maximized) {
         restoreMax(p, name);
     } else {
         if (st.minimized) { p.classList.remove('minimized'); st.minimized = false; }
-        // 保存当前位置
-        const a = getAnchor(p);
-        st.savedL = a.l; st.savedT = a.t; st.savedW = a.w; st.savedH = a.h;
-        // 启用动画 transition
+        st.savedL = parseFloat(p.style.left) || 0;
+        st.savedT = parseFloat(p.style.top)  || 0;
+        st.savedW = p.offsetWidth;
+        st.savedH = p.offsetHeight;
         withAnim(p, () => {
-            p.style.left = '0px'; p.style.top = '0px';
-            p.style.width = mc.offsetWidth + 'px';
-            p.style.height = mc.offsetHeight + 'px';
+            p.style.left   = '0';
+            p.style.top    = '0';
+            p.style.width  = window.innerWidth  + 'px';
+            p.style.height = window.innerHeight + 'px';
             p.style.transform = '';
         });
         st.maximized = true;
@@ -753,18 +1016,12 @@ function restoreMax(p, name) {
     st.maximized = false;
 }
 
-// 挂上 .animating 执行，transitionend 后摘掉，防止影响拖拽
 function withAnim(p, fn) {
-    p.classList.add('animating');
-    fn();
-    const done = () => {
-        p.classList.remove('animating');
-        p.removeEventListener('transitionend', done);
-    };
+    p.classList.add('animating'); fn();
+    const done = () => { p.classList.remove('animating'); p.removeEventListener('transitionend', done); };
     p.addEventListener('transitionend', done);
 }
 
-// ── Toggle（侧边栏按钮）──
 function togglePanel(name) {
     const p = getPanel(name);
     if (p.classList.contains('visible')) closePanel(name);
@@ -772,61 +1029,11 @@ function togglePanel(name) {
 }
 
 // ══════════════════════════════════════════════
-//  DRAG — 用 transform:translate 实现，不触发 layout
+//  DRAG — transform 方案，零 reflow
+//  边界：标题栏至少留 40px 在视口内，其余可以拖出去
 // ══════════════════════════════════════════════
-document.querySelectorAll('.panel-bar').forEach(bar => {
-    const panel = bar.closest('.float-panel');
-    const name  = panel.id.replace('panel-', '');
-
-    let drag = false;
-    let startMouseX, startMouseY;   // 拖拽开始时鼠标坐标
-    let startTX = 0, startTY = 0;   // 拖拽开始时已有的 transform offset
-
-    bar.addEventListener('mousedown', e => {
-        if (e.target.classList.contains('tl')) return;
-        if (pState[name].maximized) return;
-        // 先 commit 掉上一次拖拽残留的 transform
-        commitTransform(panel);
-        drag = true;
-        bringToFront(panel);
-        startMouseX = e.clientX;
-        startMouseY = e.clientY;
-        startTX = 0; startTY = 0;
-        document.body.style.cursor = 'grabbing';
-        e.preventDefault();
-    });
-
-    panel.addEventListener('mousedown', () => bringToFront(panel));
-
-    // mousemove / mouseup 在 document 上监听（后面统一注册）
-    panel._dragState = { drag: () => drag, setDrag: v => drag = v,
-                         getStart: () => [startMouseX, startMouseY] };
-    panel._commitFn  = () => commitTransform(panel);
-});
-
-// 统一 mousemove + mouseup，避免多个监听器
-let activeDragPanel  = null;
-let activeResizeInfo = null;
-
-document.addEventListener('mousemove', e => {
-    if (activeDragPanel) {
-        onDragMove(e, activeDragPanel);
-    } else if (activeResizeInfo) {
-        onResizeMove(e, activeResizeInfo);
-    }
-}, { passive: true }); // passive: true → 不 call preventDefault，更流畅
-
-document.addEventListener('mouseup', e => {
-    if (activeDragPanel) {
-        commitTransform(activeDragPanel);
-        activeDragPanel = null;
-        document.body.style.cursor = '';
-    }
-    if (activeResizeInfo) {
-        activeResizeInfo = null;
-        document.body.style.cursor = '';
-    }
-});
+const BAR_MIN = 40; // 标题栏最少露出 px
+let activeDragPanel = null;
 
 document.querySelectorAll('.panel-bar').forEach(bar => {
     const panel = bar.closest('.float-panel');
@@ -840,33 +1047,17 @@ document.querySelectorAll('.panel-bar').forEach(bar => {
         panel._dragStartX = e.clientX;
         panel._dragStartY = e.clientY;
         bringToFront(panel);
-        document.body.style.cursor = 'grabbing';
         e.preventDefault();
     });
+
+    panel.addEventListener('mousedown', () => bringToFront(panel));
 });
 
-function onDragMove(e, panel) {
-    const dx = e.clientX - panel._dragStartX;
-    const dy = e.clientY - panel._dragStartY;
-    // 边界：停靠坐标 + delta 不超出 mainContent
-    const mcW = mc.offsetWidth, mcH = mc.offsetHeight;
-    const l0  = parseFloat(panel.style.left) || 0;
-    const t0  = parseFloat(panel.style.top)  || 0;
-    const clampedDx = Math.max(-l0, Math.min(dx, mcW - l0 - panel.offsetWidth));
-    const clampedDy = Math.max(-t0, Math.min(dy, mcH - t0 - panel.offsetHeight));
-    // 只改 transform，GPU 合成，不触发 layout
-    panel.style.transform = `translate(${clampedDx}px,${clampedDy}px)`;
-}
-
 function commitTransform(panel) {
-    if (!panel) return;
-    const style = panel.style.transform;
-    if (!style || style === 'none' || style === '') return;
-    const m = style.match(/translate\(([^,]+)px,([^)]+)px\)/);
+    const m = (panel.style.transform || '').match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
     if (!m) return;
-    const dx = parseFloat(m[1]), dy = parseFloat(m[2]);
-    panel.style.left = (parseFloat(panel.style.left) || 0) + dx + 'px';
-    panel.style.top  = (parseFloat(panel.style.top)  || 0) + dy + 'px';
+    panel.style.left      = (parseFloat(panel.style.left) || 0) + parseFloat(m[1]) + 'px';
+    panel.style.top       = (parseFloat(panel.style.top)  || 0) + parseFloat(m[2]) + 'px';
     panel.style.transform = '';
 }
 
@@ -874,82 +1065,99 @@ function commitTransform(panel) {
 //  RESIZE
 // ══════════════════════════════════════════════
 const MIN_W = 220, MIN_H = 80;
+let activeResizeInfo = null;
 
 document.querySelectorAll('.resize-handle').forEach(handle => {
     const panel = handle.closest('.float-panel');
     const name  = panel.id.replace('panel-', '');
-    const dir   = handle.dataset.dir;
 
     handle.addEventListener('mousedown', e => {
         if (pState[name].maximized || pState[name].minimized) return;
-        // commit 任何残留的拖拽 transform
         commitTransform(panel);
         bringToFront(panel);
-
         activeResizeInfo = {
-            panel, dir,
+            panel, dir: handle.dataset.dir,
             startX: e.clientX, startY: e.clientY,
-            startL: parseFloat(panel.style.left)   || 0,
-            startT: parseFloat(panel.style.top)    || 0,
+            startL: parseFloat(panel.style.left) || 0,
+            startT: parseFloat(panel.style.top)  || 0,
             startW: panel.offsetWidth,
             startH: panel.offsetHeight
         };
-
-        document.body.style.cursor = getComputedStyle(handle).cursor;
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
     });
 });
 
-function onResizeMove(e, ri) {
-    const { panel, dir, startX, startY, startL, startT, startW, startH } = ri;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    const mcW = mc.offsetWidth, mcH = mc.offsetHeight;
+// ══════════════════════════════════════════════
+//  全局 mousemove / mouseup
+// ══════════════════════════════════════════════
+document.addEventListener('mousemove', e => {
 
-    let nl = startL, nt = startT, nw = startW, nh = startH;
+    // 拖拽
+    if (activeDragPanel) {
+        const dx = e.clientX - activeDragPanel._dragStartX;
+        const dy = e.clientY - activeDragPanel._dragStartY;
+        const l0 = parseFloat(activeDragPanel.style.left) || 0;
+        const t0 = parseFloat(activeDragPanel.style.top)  || 0;
+        const pw = activeDragPanel.offsetWidth;
+        const ph = activeDragPanel.offsetHeight;
+        const vw = window.innerWidth, vh = window.innerHeight;
 
-    if (dir.includes('e')) nw = Math.max(MIN_W, startW + dx);
-    if (dir.includes('s')) nh = Math.max(MIN_H, startH + dy);
-    if (dir.includes('w')) { nw = Math.max(MIN_W, startW - dx); nl = startL + startW - nw; }
-    if (dir.includes('n')) { nh = Math.max(MIN_H, startH - dy); nt = startT + startH - nh; }
+        // 限制：标题栏（高38px）左边至少 BAR_MIN px 在视口内，顶部不超出，底部至少留 BAR_MIN
+        const minDx = -(l0 + pw - BAR_MIN);          // 向右最多让左边缩到 BAR_MIN 露出
+        const maxDx = vw - l0 - BAR_MIN;              // 向左最多让右边缩到 BAR_MIN 露出
+        const minDy = -t0;                             // 顶部不超出视口
+        const maxDy = vh - t0 - BAR_MIN;              // 底部至少 BAR_MIN 露出
 
-    nl = Math.max(0, Math.min(nl, mcW - MIN_W));
-    nt = Math.max(0, Math.min(nt, mcH - MIN_H));
+        const cdx = Math.max(minDx, Math.min(dx, maxDx));
+        const cdy = Math.max(minDy, Math.min(dy, maxDy));
 
-    // 直接写 style — resize 必须改 width/height，但不 transition
-    panel.style.left   = nl + 'px';
-    panel.style.top    = nt + 'px';
-    panel.style.width  = nw + 'px';
-    panel.style.height = nh + 'px';
-}
+        activeDragPanel.style.transform = `translate(${cdx}px,${cdy}px)`;
+    }
+
+    // 缩放
+    if (activeResizeInfo) {
+        const { panel, dir, startX, startY, startL, startT, startW, startH } = activeResizeInfo;
+        const dx = e.clientX - startX, dy = e.clientY - startY;
+        let nl = startL, nt = startT, nw = startW, nh = startH;
+
+        if (dir.includes('e')) nw = Math.max(MIN_W, startW + dx);
+        if (dir.includes('s')) nh = Math.max(MIN_H, startH + dy);
+        if (dir.includes('w')) { nw = Math.max(MIN_W, startW - dx); nl = startL + startW - nw; }
+        if (dir.includes('n')) { nh = Math.max(MIN_H, startH - dy); nt = startT + startH - nh; }
+
+        panel.style.left   = nl + 'px';
+        panel.style.top    = nt + 'px';
+        panel.style.width  = nw + 'px';
+        panel.style.height = nh + 'px';
+    }
+
+}, { passive: true });
+
+document.addEventListener('mouseup', () => {
+    if (activeDragPanel) { commitTransform(activeDragPanel); activeDragPanel = null; }
+    activeResizeInfo = null;
+});
 
 // ══════════════════════════════════════════════
 //  GAME LOGIC
 // ══════════════════════════════════════════════
 let requiredJavaVersion = 8;
-const versionSelect = document.getElementById('versionSelect');
-const statusMsg     = document.getElementById('statusMsg');
-const launchBtn     = document.getElementById('launchBtn');
+const statusMsg = document.getElementById('statusMsg');
+const launchBtn = document.getElementById('launchBtn');
 
 fetch('/api/versions')
     .then(r => r.json())
-    .then(data => {
-        versionSelect.innerHTML = '';
-        if (!data.length) { versionSelect.innerHTML = '<option>未找到版本</option>'; return; }
-        data.forEach(v => {
-            if (v.type === 'release') {
-                const o = document.createElement('option');
-                o.value = v.id; o.text = v.id;
-                versionSelect.appendChild(o);
-            }
-        });
-    })
-    .catch(() => { statusMsg.innerText = '离线模式 / 网络错误'; });
+    .then(data => buildVersionList(data))
+    .catch(() => {
+        document.getElementById('versionDisplay').textContent = '网络错误 / 离线模式';
+        statusMsg.innerText = '版本加载失败';
+    });
 
 function launchGame() {
     const username = document.getElementById('username').value.trim();
     if (!username) { shakePanel('play'); return; }
+    if (!selectedVersion) { statusMsg.innerText = '请先选择版本'; return; }
+
     setLoading(true);
     statusMsg.innerText = '正在初始化...';
     statusMsg.style.color = '';
@@ -957,31 +1165,21 @@ function launchGame() {
     fetch('/api/launch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            username,
-            version: versionSelect.value,
-            memory:  parseInt(document.getElementById('memory').value)
-        })
+        body: JSON.stringify({ username, version: selectedVersion, memory: parseInt(document.getElementById('memory').value) })
     })
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            statusMsg.innerText = '启动成功！';
-            statusMsg.style.color = 'var(--lime)';
+            statusMsg.innerText = '启动成功！'; statusMsg.style.color = 'var(--lime)';
         } else if (data.error === 'no_java') {
-            statusMsg.innerText = '缺少 Java 环境';
-            statusMsg.style.color = 'var(--rust)';
+            statusMsg.innerText = '缺少 Java 环境'; statusMsg.style.color = 'var(--rust)';
             requiredJavaVersion = data.requiredVersion || 8;
             showJavaModal();
         } else {
-            statusMsg.innerText = '错误：' + data.message;
-            statusMsg.style.color = 'var(--rust)';
+            statusMsg.innerText = '错误：' + data.message; statusMsg.style.color = 'var(--rust)';
         }
     })
-    .catch(() => {
-        statusMsg.innerText = '连接失败';
-        statusMsg.style.color = 'var(--rust)';
-    })
+    .catch(() => { statusMsg.innerText = '连接失败'; statusMsg.style.color = 'var(--rust)'; })
     .finally(() => setLoading(false));
 }
 
@@ -989,20 +1187,18 @@ function setLoading(on) {
     launchBtn.disabled = on;
     launchBtn.innerHTML = on
         ? '处理中...'
-        : '<svg style="width:15px;height:15px;fill:currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> 启动游戏';
+        : '<svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> 启动游戏';
 }
 
 function shakePanel(name) {
-    const p = getPanel(name);
-    commitTransform(p);
+    const p = getPanel(name); commitTransform(p);
     const seq = [5,-5,4,-4,2,-2,0];
-    seq.forEach((v,i) => setTimeout(() => p.style.transform = `translateX(${v}px)`, i * 45));
+    seq.forEach((v, i) => setTimeout(() => p.style.transform = `translateX(${v}px)`, i * 45));
     setTimeout(() => { p.style.transform = ''; commitTransform(p); }, seq.length * 45 + 50);
 }
 
 // Java Modal
 const javaModal = document.getElementById('javaModal');
-let pollTimer = null;
 
 function showJavaModal() {
     document.getElementById('targetJavaVer').innerText        = requiredJavaVersion;
@@ -1013,12 +1209,18 @@ function showJavaModal() {
 
 function closeJavaModal() {
     javaModal.style.display = 'none';
-    if (pollTimer) clearInterval(pollTimer);
 }
 
 function confirmInstallJava() {
     document.getElementById('javaModalActions').style.display = 'none';
     document.getElementById('javaProgressUI').style.display   = 'block';
+    
+    // Reset UI
+    document.getElementById('javaProgressBar').style.width = '0%';
+    document.getElementById('javaPercent').innerText = '0%';
+    document.getElementById('javaStatusText').innerText = '正在请求...';
+    document.getElementById('javaStatusText').style.color = '';
+
     fetch('/api/java/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1026,37 +1228,46 @@ function confirmInstallJava() {
     })
     .then(r => r.json())
     .then(d => {
-        if (d.success) startPolling();
-        else {
-            document.getElementById('javaStatusText').innerText = '请求失败';
-            setTimeout(closeJavaModal, 2000);
+        if (!d.success) { 
+            document.getElementById('javaStatusText').innerText = '请求失败: ' + d.message; 
+            document.getElementById('javaStatusText').style.color = 'var(--rust)';
         }
     });
 }
 
-function startPolling() {
-    pollTimer = setInterval(() => {
-        fetch('/api/java/status').then(r => r.json()).then(data => {
-            if (data.installing) {
-                const pct = data.progress + '%';
+// WebSocket
+let ws = null;
+function connectWS() {
+    ws = new WebSocket('ws://localhost:8081');
+    ws.onopen = () => console.log('WS Connected');
+    ws.onmessage = (e) => {
+        try {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'java_progress') {
+                const pct = msg.percent + '%';
                 document.getElementById('javaProgressBar').style.width = pct;
-                document.getElementById('javaPercent').innerText        = pct;
-                document.getElementById('javaStatusText').innerText     = data.message;
-            } else {
-                clearInterval(pollTimer);
-                if (data.success) {
+                document.getElementById('javaPercent').innerText = pct;
+                document.getElementById('javaStatusText').innerText = msg.message;
+            } else if (msg.type === 'java_finished') {
+                if (msg.success) {
                     document.getElementById('javaProgressBar').style.width = '100%';
-                    document.getElementById('javaStatusText').innerText    = '完成！正在启动...';
-                    document.getElementById('javaStatusText').style.color  = 'var(--lime)';
+                    document.getElementById('javaStatusText').innerText = '完成！正在启动...';
+                    document.getElementById('javaStatusText').style.color = 'var(--lime)';
                     setTimeout(() => { closeJavaModal(); launchGame(); }, 1000);
                 } else {
-                    document.getElementById('javaStatusText').innerText   = '错误：' + data.error;
+                    document.getElementById('javaStatusText').innerText = '错误：' + msg.error;
                     document.getElementById('javaStatusText').style.color = 'var(--rust)';
                 }
             }
-        });
-    }, 500);
+        } catch(e) { console.error(e); }
+    };
+    ws.onclose = () => setTimeout(connectWS, 2000); // Auto reconnect
 }
+
+// ── Init ──
+initSlider();
+refreshCursorTargets();
+connectWS();
 </script>
 </body>
 </html>

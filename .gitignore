@@ -63,3 +63,7 @@ Makefile*
 .DS_Store
 Thumbs.db
 
+DESIGN.md
+*.html
+*.html
+index.html

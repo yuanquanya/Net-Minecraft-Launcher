@@ -6,11 +6,83 @@
 #include <QJsonArray>
 #include <QTextStream>
 #include <iostream>
+#include <utility> // for std::as_const
 
-HttpServer::HttpServer(QObject *parent) : QTcpServer(parent), launcher(nullptr) {}
+HttpServer::HttpServer(QObject *parent) 
+    : QTcpServer(parent), launcher(nullptr) 
+{
+#ifdef NMCL_USE_WEBSOCKETS
+    wsServer = new QWebSocketServer(QStringLiteral("NMCL WebSocket"), QWebSocketServer::NonSecureMode, this);
+    if (wsServer->listen(QHostAddress::Any, 8081)) {
+        std::cout << "WebSocket Server running at ws://localhost:8081" << std::endl;
+        connect(wsServer, &QWebSocketServer::newConnection, this, &HttpServer::onNewWebSocketConnection);
+    } else {
+        std::cerr << "Failed to start WebSocket Server on port 8081" << std::endl;
+    }
+#endif
+}
+
+HttpServer::~HttpServer() {
+#ifdef NMCL_USE_WEBSOCKETS
+    if (wsServer) wsServer->close();
+    qDeleteAll(clients.begin(), clients.end());
+    clients.clear();
+#endif
+}
 
 void HttpServer::setLauncher(LauncherCore* core) {
     launcher = core;
+    if (launcher) {
+        // Connect signals
+        connect(launcher, &LauncherCore::javaProgress, this, &HttpServer::broadcastJavaProgress);
+        connect(launcher, &LauncherCore::javaFinished, this, &HttpServer::broadcastJavaFinished);
+    }
+}
+
+#ifdef NMCL_USE_WEBSOCKETS
+void HttpServer::onNewWebSocketConnection() {
+    QWebSocket *pSocket = wsServer->nextPendingConnection();
+    connect(pSocket, &QWebSocket::disconnected, this, &HttpServer::onWebSocketDisconnected);
+    clients << pSocket;
+    std::cout << "[WS] Client connected" << std::endl;
+}
+
+void HttpServer::onWebSocketDisconnected() {
+    QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
+    if (pClient) {
+        clients.removeAll(pClient);
+        pClient->deleteLater();
+        std::cout << "[WS] Client disconnected" << std::endl;
+    }
+}
+#endif
+
+void HttpServer::broadcastJavaProgress(int percent, QString message) {
+#ifdef NMCL_USE_WEBSOCKETS
+    QJsonObject obj;
+    obj["type"] = "java_progress";
+    obj["percent"] = percent;
+    obj["message"] = message;
+    
+    QString text = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    for (QWebSocket *pClient : std::as_const(clients)) {
+        pClient->sendTextMessage(text);
+    }
+#endif
+}
+
+void HttpServer::broadcastJavaFinished(bool success, QString error) {
+#ifdef NMCL_USE_WEBSOCKETS
+    QJsonObject obj;
+    obj["type"] = "java_finished";
+    obj["success"] = success;
+    obj["error"] = error;
+    
+    QString text = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    for (QWebSocket *pClient : std::as_const(clients)) {
+        pClient->sendTextMessage(text);
+    }
+#endif
 }
 
 void HttpServer::incomingConnection(qintptr socketDescriptor) {
