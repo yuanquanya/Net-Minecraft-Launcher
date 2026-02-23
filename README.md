@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # Net-Minecraft-Launcher
+=======
+# Net Minecraft Launcher
+>>>>>>> 507621b1b2f96ac00e7dbd87dff6907d9f98c20b
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
