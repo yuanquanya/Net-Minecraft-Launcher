@@ -264,7 +264,7 @@ QVector<JavaEntry> LauncherCore::refreshJavaListSync() {
 
 void LauncherCore::refreshJavaList() {
     QPointer<LauncherCore> self(this);
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         if (!self) return;
         QVector<JavaEntry> list = self->refreshJavaListSync();
         // Re-check: object may have been destroyed during the long scan.
@@ -274,8 +274,8 @@ void LauncherCore::refreshJavaList() {
 
 QVector<JavaEntry> LauncherCore::getJavaList() const {
     QReadLocker rl(&javaListLock);
-    return javaList;
-}
+        return javaList;
+    }
 
 JavaStatus LauncherCore::getJavaStatus() const {
     QMutexLocker locker(&m_javaStatusLock);
@@ -401,7 +401,7 @@ void LauncherCore::installJava(int majorVersion) {
     // all emits become no-ops instead of crashing.
     QPointer<LauncherCore> self(this);
 
-    QtConcurrent::run([self, majorVersion]() {
+    (void)QtConcurrent::run([self, majorVersion]() {
         // All emits go through this guard – silently drops if object was destroyed.
         auto safeEmit = [&self](auto fn) {
             if (self) fn(self.data());
@@ -1548,4 +1548,159 @@ void LauncherCore::stepWait(LaunchContext& ctx) {
 
     if (found) { emit launchLog("Window detected."); emit gameWindowReady(); }
     else         emit launchLog("[Warning] Window not detected within 3 minutes.");
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Version Management Implementation
+// ════════════════════════════════════════════════════════════════════════════
+
+std::vector<MinecraftVersion> LauncherCore::getRemoteVersionList() {
+    QMutexLocker locker(&m_remoteVersionsLock);
+    if (m_remoteVersionsCachedAt.isValid() && 
+        m_remoteVersionsCachedAt.secsTo(QDateTime::currentDateTime()) < 300) {
+        return m_remoteVersionsCache;
+    }
+    
+    // Fetch from BMCLAPI (faster in CN)
+    QString url = "https://bmclapi2.bangbang93.com/mc/game/version_manifest_v2.json";
+    QByteArray data = httpGet(url.toStdString());
+    if (data.isEmpty()) {
+        url = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
+        data = httpGet(url.toStdString());
+    }
+    
+    if (data.isEmpty()) return m_remoteVersionsCache; // Return stale cache if fail
+    
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) return m_remoteVersionsCache;
+    
+    std::vector<MinecraftVersion> versions;
+    QJsonArray arr = doc.object()["versions"].toArray();
+    for (const QJsonValue& v : arr) {
+        QJsonObject o = v.toObject();
+        MinecraftVersion mv;
+        mv.id = o["id"].toString().toStdString();
+        mv.type = o["type"].toString().toStdString();
+        mv.url = o["url"].toString().toStdString();
+        versions.push_back(mv);
+    }
+    
+    m_remoteVersionsCache = versions;
+    m_remoteVersionsCachedAt = QDateTime::currentDateTime();
+    return versions;
+}
+
+std::vector<InstalledVersion> LauncherCore::getInstalledVersions() const {
+    std::vector<InstalledVersion> installed;
+    QDir versionsDir(QString::fromStdString(workDir) + "/versions");
+    if (!versionsDir.exists()) return installed;
+    
+    for (const QString& entry : versionsDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        QDir vDir(versionsDir.filePath(entry));
+        QString jsonPath = vDir.filePath(entry + ".json");
+        if (!QFile::exists(jsonPath)) continue;
+        
+        InstalledVersion iv;
+        iv.id = entry.toStdString();
+        
+        // Parse JSON for type
+        QFile f(jsonPath);
+        if (f.open(QIODevice::ReadOnly)) {
+            QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+            iv.type = doc.object()["type"].toString().toStdString();
+        }
+        
+        // Check isolation
+        iv.isolated = false; 
+        
+        installed.push_back(iv);
+    }
+    return installed;
+}
+
+bool LauncherCore::setVersionIsolation(const std::string& versionId, bool isolated) {
+    // TODO: Implement isolation logic
+    return true;
+}
+
+McDownloadStatus LauncherCore::getDownloadStatus() const {
+    QMutexLocker locker(&m_dlStatusLock);
+    return m_dlStatus;
+}
+
+void LauncherCore::downloadMinecraftVersion(const std::string& versionId) {
+    QPointer<LauncherCore> self(this);
+    (void)QtConcurrent::run([self, versionId]() {
+        if (!self) return;
+        
+        auto setStatus = [&](const QString& msg, int progress, bool active, bool success = false, const QString& err = "") {
+             if (!self) return;
+             QMutexLocker l(&self->m_dlStatusLock);
+             self->m_dlStatus.active = active;
+             self->m_dlStatus.versionId = versionId;
+             self->m_dlStatus.progress = progress;
+             self->m_dlStatus.statusMsg = msg.toStdString();
+             self->m_dlStatus.success = success;
+             self->m_dlStatus.error = err.toStdString();
+             
+             emit self->mcDownloadProgress(progress, msg);
+             if (!active) emit self->mcDownloadFinished(success, QString::fromStdString(versionId), err);
+        };
+        
+        setStatus("Fetching manifest...", 0, true);
+        
+        // 1. Fetch manifest URL
+        std::string manifestUrl;
+        {
+            auto list = self->getRemoteVersionList();
+            for (const auto& v : list) {
+                if (v.id == versionId) { manifestUrl = v.url; break; }
+            }
+        }
+        
+        if (manifestUrl.empty()) {
+            setStatus("Version not found", 0, false, false, "Version ID not found in remote list");
+            return;
+        }
+        
+        // 2. Download Manifest
+        QByteArray json = self->httpGet(manifestUrl);
+        if (json.isEmpty()) {
+            setStatus("Failed to fetch manifest", 0, false, false, "Network error fetching manifest");
+            return;
+        }
+        
+        // 3. Save Manifest
+        QString vDir = QString::fromStdString(self->workDir) + "/versions/" + QString::fromStdString(versionId);
+        QDir().mkpath(vDir);
+        QString jsonPath = vDir + "/" + QString::fromStdString(versionId) + ".json";
+        QFile f(jsonPath);
+        if (f.open(QIODevice::WriteOnly)) {
+            f.write(json);
+            f.close();
+        } else {
+             setStatus("File write error", 0, false, false, "Cannot write version json");
+             return;
+        }
+        
+        // 4. Download Client JAR (Minimal implementation)
+        QJsonObject manifest = QJsonDocument::fromJson(json).object();
+        if (manifest.contains("downloads")) {
+             QJsonObject cl = manifest["downloads"].toObject()["client"].toObject();
+             std::string url = cl["url"].toString().toStdString();
+             std::string path = (fs::path(self->workDir) / "versions" / versionId / (versionId + ".jar")).string();
+             int size = cl["size"].toInt();
+             std::string sha1 = cl["sha1"].toString().toStdString();
+             
+             setStatus("Downloading Client JAR...", 50, true);
+             if (!self->validateFile(path, size, sha1)) {
+                 if (!self->downloadFile(url, path, size, sha1)) {
+                      setStatus("Download failed", 0, false, false, "Failed to download client jar");
+                      return;
+                 }
+             }
+        }
+        
+        setStatus("Download complete", 100, false, true);
+    });
 }

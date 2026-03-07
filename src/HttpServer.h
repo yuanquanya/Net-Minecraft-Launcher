@@ -28,6 +28,8 @@ private slots:
     // Broadcast slots
     void broadcastJavaProgress(int percent, QString message);
     void broadcastJavaFinished(bool success, QString error);
+    void broadcastMcDownloadProgress(int percent, QString message);
+    void broadcastMcDownloadFinished(bool success, QString versionId, QString error);
 
 private:
     LauncherCore* launcher;

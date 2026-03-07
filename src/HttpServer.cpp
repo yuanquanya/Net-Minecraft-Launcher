@@ -34,8 +34,10 @@ void HttpServer::setLauncher(LauncherCore* core) {
     launcher = core;
     if (launcher) {
         // Connect signals
-        connect(launcher, &LauncherCore::javaProgress, this, &HttpServer::broadcastJavaProgress);
-        connect(launcher, &LauncherCore::javaFinished, this, &HttpServer::broadcastJavaFinished);
+        connect(launcher, &LauncherCore::javaProgress,        this, &HttpServer::broadcastJavaProgress);
+        connect(launcher, &LauncherCore::javaFinished,        this, &HttpServer::broadcastJavaFinished);
+        connect(launcher, &LauncherCore::mcDownloadProgress,  this, &HttpServer::broadcastMcDownloadProgress);
+        connect(launcher, &LauncherCore::mcDownloadFinished,  this, &HttpServer::broadcastMcDownloadFinished);
     }
 }
 
@@ -82,6 +84,31 @@ void HttpServer::broadcastJavaFinished(bool success, QString error) {
     for (QWebSocket *pClient : std::as_const(clients)) {
         pClient->sendTextMessage(text);
     }
+#endif
+}
+
+void HttpServer::broadcastMcDownloadProgress(int percent, QString message) {
+#ifdef NMCL_USE_WEBSOCKETS
+    QJsonObject obj;
+    obj["type"]    = "mc_download_progress";
+    obj["percent"] = percent;
+    obj["message"] = message;
+    QString text = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    for (QWebSocket *pClient : std::as_const(clients))
+        pClient->sendTextMessage(text);
+#endif
+}
+
+void HttpServer::broadcastMcDownloadFinished(bool success, QString versionId, QString error) {
+#ifdef NMCL_USE_WEBSOCKETS
+    QJsonObject obj;
+    obj["type"]      = "mc_download_finished";
+    obj["success"]   = success;
+    obj["versionId"] = versionId;
+    obj["error"]     = error;
+    QString text = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    for (QWebSocket *pClient : std::as_const(clients))
+        pClient->sendTextMessage(text);
 #endif
 }
 
@@ -223,6 +250,105 @@ void HttpServer::incomingConnection(qintptr socketDescriptor) {
                  resp["message"] = "Invalid version";
                  responseBody = QJsonDocument(resp).toJson();
              }
+        }
+        else if (method == "GET" && url == "/api/versions/remote") {
+            // Return all versions from Mojang manifest (cached 5 min)
+            contentType = "application/json";
+            if (launcher) {
+                auto versions = launcher->getRemoteVersionList();
+                QJsonArray arr;
+                for (const auto& v : versions) {
+                    QJsonObject obj;
+                    obj["id"]   = QString::fromStdString(v.id);
+                    obj["type"] = QString::fromStdString(v.type);
+                    arr.append(obj);
+                }
+                responseBody = QJsonDocument(arr).toJson();
+            } else {
+                responseBody = "[]";
+            }
+        }
+        else if (method == "GET" && url == "/api/versions/installed") {
+            // Return locally installed versions with isolation info
+            contentType = "application/json";
+            if (launcher) {
+                auto versions = launcher->getInstalledVersions();
+                QJsonArray arr;
+                for (const auto& v : versions) {
+                    QJsonObject obj;
+                    obj["id"]        = QString::fromStdString(v.id);
+                    obj["type"]      = QString::fromStdString(v.type);
+                    obj["isolated"]  = v.isolated;
+                    obj["gameDir"]   = QString::fromStdString(v.gameDir);
+                    obj["diskBytes"] = static_cast<double>(v.diskBytes);
+                    arr.append(obj);
+                }
+                responseBody = QJsonDocument(arr).toJson();
+            } else {
+                responseBody = "[]";
+            }
+        }
+        else if (method == "POST" && url == "/api/download/minecraft") {
+            contentType = "application/json";
+            QStringList parts = requestStr.split("\r\n\r\n");
+            QString body = parts.size() > 1 ? parts.last() : "";
+            if (body.isEmpty()) { parts = requestStr.split("\n\n"); body = parts.size() > 1 ? parts.last() : ""; }
+
+            QJsonDocument doc = QJsonDocument::fromJson(body.toUtf8());
+            QString verId = doc.object()["versionId"].toString();
+
+            if (launcher && !verId.isEmpty()) {
+                QMetaObject::invokeMethod(launcher, [launcher=this->launcher, verId](){
+                    launcher->downloadMinecraftVersion(verId.toStdString());
+                }, Qt::QueuedConnection);
+
+                QJsonObject resp;
+                resp["success"] = true;
+                resp["message"] = "下载已开始";
+                responseBody = QJsonDocument(resp).toJson();
+            } else {
+                QJsonObject resp;
+                resp["success"] = false;
+                resp["message"] = "无效的版本 ID";
+                responseBody = QJsonDocument(resp).toJson();
+            }
+        }
+        else if (method == "GET" && url == "/api/download/status") {
+            contentType = "application/json";
+            if (launcher) {
+                auto s = launcher->getDownloadStatus();
+                QJsonObject obj;
+                obj["active"]     = s.active;
+                obj["versionId"]  = QString::fromStdString(s.versionId);
+                obj["progress"]   = s.progress;
+                obj["message"]    = QString::fromStdString(s.statusMsg);
+                obj["success"]    = s.success;
+                obj["error"]      = QString::fromStdString(s.error);
+                responseBody = QJsonDocument(obj).toJson();
+            } else {
+                responseBody = "{}";
+            }
+        }
+        else if (method == "POST" && url == "/api/versions/isolation") {
+            contentType = "application/json";
+            QStringList parts = requestStr.split("\r\n\r\n");
+            QString body = parts.size() > 1 ? parts.last() : "";
+            if (body.isEmpty()) { parts = requestStr.split("\n\n"); body = parts.size() > 1 ? parts.last() : ""; }
+
+            QJsonDocument doc = QJsonDocument::fromJson(body.toUtf8());
+            QString verId    = doc.object()["versionId"].toString();
+            bool    isolated = doc.object()["isolated"].toBool();
+
+            QJsonObject resp;
+            if (launcher && !verId.isEmpty()) {
+                bool ok = launcher->setVersionIsolation(verId.toStdString(), isolated);
+                resp["success"] = ok;
+                resp["message"] = ok ? "隔离设置已保存" : "设置失败";
+            } else {
+                resp["success"] = false;
+                resp["message"] = "无效参数";
+            }
+            responseBody = QJsonDocument(resp).toJson();
         }
         else {
             statusCode = 404;

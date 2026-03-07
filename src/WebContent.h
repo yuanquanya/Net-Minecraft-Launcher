@@ -603,6 +603,141 @@ const char* INDEX_HTML = R"html(
         .progress-bar   { height:3px; background:var(--stroke); overflow:hidden; }
         .progress-fill  { height:100%; background:var(--lime); width:0%; transition:width 0.3s; }
 
+        /* ══ DOWNLOAD PANEL ══════════════════════════════════════════════════ */
+
+        /* Tab bar for release/snapshot/old filter */
+        .dl-tabs {
+            display: flex; gap: 0; border-bottom: 1px solid var(--stroke);
+            flex-shrink: 0; background: var(--mid);
+        }
+        .dl-tab {
+            flex: 1; padding: 0.45rem 0; text-align: center;
+            font-family: var(--font-m); font-size: 0.55rem;
+            color: var(--muted); letter-spacing: 0.1em;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .dl-tab:hover  { color: var(--text); background: rgba(163,230,53,0.04); }
+        .dl-tab.active { color: var(--lime); border-bottom-color: var(--lime); }
+
+        /* Scrollable version list */
+        .dl-list {
+            flex: 1; overflow-y: auto; min-height: 0;
+            display: flex; flex-direction: column;
+        }
+        .dl-row {
+            display: flex; align-items: center;
+            padding: 0.55rem 1rem; gap: 0.7rem;
+            border-bottom: 1px solid var(--stroke);
+            transition: background 0.1s;
+        }
+        .dl-row:hover { background: rgba(163,230,53,0.04); }
+
+        .dl-id {
+            flex: 1; font-family: var(--font-m); font-size: 0.72rem;
+            color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .dl-tag {
+            font-family: var(--font-px); font-size: 0.28rem;
+            border: 1px solid var(--stroke); padding: 0.12rem 0.3rem;
+            color: var(--muted); flex-shrink: 0;
+        }
+        .dl-tag.release  { border-color:rgba(163,230,53,0.4); color:rgba(163,230,53,0.75); }
+        .dl-tag.snapshot { border-color:rgba(245,158,11,0.4); color:rgba(245,158,11,0.75); }
+        .dl-tag.old_beta, .dl-tag.old_alpha { border-color:rgba(239,68,68,0.3); color:rgba(239,68,68,0.6); }
+
+        .dl-btn {
+            font-family: var(--font-m); font-size: 0.58rem;
+            color: var(--lime); background: var(--lime-bg);
+            border: 1px solid var(--lime-bdr);
+            padding: 0.25rem 0.6rem;
+            transition: background 0.15s, color 0.15s;
+            flex-shrink: 0;
+        }
+        .dl-btn:hover  { background: rgba(163,230,53,0.18); }
+        .dl-btn:active { background: rgba(163,230,53,0.28); }
+        .dl-btn:disabled { opacity: 0.35; pointer-events: none; }
+        .dl-btn.done { color: var(--muted); border-color: var(--stroke); background: transparent; }
+
+        /* Bottom progress strip */
+        .dl-footer {
+            flex-shrink: 0; border-top: 1px solid var(--stroke);
+            padding: 0.65rem 1rem; background: var(--mid);
+        }
+        .dl-footer-row { display:flex; justify-content:space-between; margin-bottom:0.4rem; }
+        .dl-footer-msg { font-family:var(--font-m); font-size:0.58rem; color:var(--muted); }
+        .dl-footer-pct { font-family:var(--font-px); font-size:0.42rem; color:var(--lime); }
+        .dl-footer-bar { height:2px; background:var(--stroke); overflow:hidden; }
+        .dl-footer-fill{ height:100%; background:var(--lime); width:0%; transition:width 0.35s; }
+
+        /* ══ VERSION MANAGEMENT PANEL ════════════════════════════════════════ */
+
+        .vmgr-list { flex:1; overflow-y:auto; min-height:0; }
+
+        .vmgr-row {
+            display:flex; align-items:center;
+            padding: 0.65rem 1rem; gap: 0.8rem;
+            border-bottom: 1px solid var(--stroke);
+            transition: background 0.1s;
+        }
+        .vmgr-row:hover { background: rgba(163,230,53,0.03); }
+
+        .vmgr-id {
+            flex:1; font-family: var(--font-m); font-size: 0.72rem; color: var(--text);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        .vmgr-size {
+            font-family: var(--font-m); font-size: 0.55rem; color: var(--muted);
+            flex-shrink: 0; min-width: 48px; text-align: right;
+        }
+
+        /* Toggle switch for isolation */
+        .iso-wrap {
+            display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0;
+        }
+        .iso-label {
+            font-family: var(--font-m); font-size: 0.52rem; color: var(--muted);
+        }
+        .iso-switch {
+            width: 28px; height: 14px; background: var(--stroke);
+            border-radius: 7px; position: relative;
+            transition: background 0.2s;
+        }
+        .iso-switch::after {
+            content: ''; position: absolute;
+            left: 2px; top: 2px; width: 10px; height: 10px;
+            background: var(--muted); border-radius: 50%;
+            transition: left 0.2s, background 0.2s;
+        }
+        .iso-switch.on { background: rgba(163,230,53,0.3); }
+        .iso-switch.on::after { left: 16px; background: var(--lime); }
+
+        .vmgr-play {
+            font-family: var(--font-m); font-size: 0.55rem; flex-shrink: 0;
+            color: var(--lime); background: transparent;
+            border: 1px solid var(--lime-bdr); padding: 0.2rem 0.5rem;
+            transition: background 0.15s;
+        }
+        .vmgr-play:hover { background: var(--lime-bg); }
+
+        .vmgr-empty {
+            padding: 2rem 1rem; text-align: center;
+            font-family: var(--font-m); font-size: 0.62rem; color: var(--muted);
+        }
+        .vmgr-header {
+            display:flex; justify-content:space-between; align-items:center;
+            padding: 0.55rem 1rem; border-bottom: 1px solid var(--stroke);
+            background: var(--mid); flex-shrink:0;
+        }
+        .vmgr-header-title { font-family:var(--font-m); font-size:0.55rem; color:var(--muted); letter-spacing:0.12em; }
+        .vmgr-refresh {
+            font-family:var(--font-m); font-size:0.55rem; color:var(--muted);
+            background:transparent; border: 1px solid var(--stroke); padding:0.2rem 0.5rem;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .vmgr-refresh:hover { color:var(--lime); border-color:var(--lime-bdr); }
+
         ::-webkit-scrollbar { width:4px; }
         ::-webkit-scrollbar-track { background:var(--dark); }
         ::-webkit-scrollbar-thumb { background:var(--stroke); }
@@ -635,6 +770,14 @@ const char* INDEX_HTML = R"html(
         <div class="nav-item" id="nav-user"     onclick="togglePanel('user')"     title="用户">
             <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
             <span class="nav-label">用户</span>
+        </div>
+        <div class="nav-item" id="nav-download" onclick="togglePanel('download')" title="下载 Minecraft">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            <span class="nav-label">下载</span>
+        </div>
+        <div class="nav-item" id="nav-versions" onclick="togglePanel('versions')" title="版本管理">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+            <span class="nav-label">版本管理</span>
         </div>
     </div>
 
@@ -754,6 +897,72 @@ const char* INDEX_HTML = R"html(
             <div class="user-placeholder-title">// 用户资料</div>
             <div class="user-placeholder-sub">即将推出...</div>
         </div>
+    </div>
+    <div class="resize-handle n"  data-dir="n"></div>
+    <div class="resize-handle s"  data-dir="s"></div>
+    <div class="resize-handle e"  data-dir="e"></div>
+    <div class="resize-handle w"  data-dir="w"></div>
+    <div class="resize-handle ne" data-dir="ne"></div>
+    <div class="resize-handle nw" data-dir="nw"></div>
+    <div class="resize-handle se" data-dir="se"></div>
+    <div class="resize-handle sw" data-dir="sw"></div>
+</div>
+
+<!-- ════ 下载面板 ════ -->
+<div class="float-panel" id="panel-download" style="left:700px;top:80px;width:400px;height:520px;">
+    <div class="panel-bar">
+        <div class="tl-wrap">
+            <div class="tl red"    onclick="closePanel('download')"></div>
+            <div class="tl yellow" onclick="minimizePanel('download')"></div>
+            <div class="tl green"  onclick="maximizePanel('download')"></div>
+        </div>
+        <span class="panel-title">nmcl — 下载 Minecraft</span>
+    </div>
+    <!-- Tab filter -->
+    <div class="dl-tabs">
+        <div class="dl-tab active" id="dlTab-release"   onclick="setDlTab('release')">正式版</div>
+        <div class="dl-tab"        id="dlTab-snapshot"  onclick="setDlTab('snapshot')">快照版</div>
+        <div class="dl-tab"        id="dlTab-old_beta"  onclick="setDlTab('old_beta')">Beta</div>
+        <div class="dl-tab"        id="dlTab-old_alpha" onclick="setDlTab('old_alpha')">Alpha</div>
+    </div>
+    <!-- Version list -->
+    <div class="dl-list" id="dlList">
+        <div class="px-loading" style="padding:1rem 1.2rem">正在加载远程版本列表...</div>
+    </div>
+    <!-- Progress footer -->
+    <div class="dl-footer" id="dlFooter" style="display:none;">
+        <div class="dl-footer-row">
+            <span class="dl-footer-msg" id="dlFooterMsg">准备中...</span>
+            <span class="dl-footer-pct" id="dlFooterPct">0%</span>
+        </div>
+        <div class="dl-footer-bar"><div class="dl-footer-fill" id="dlFooterFill"></div></div>
+    </div>
+    <div class="resize-handle n"  data-dir="n"></div>
+    <div class="resize-handle s"  data-dir="s"></div>
+    <div class="resize-handle e"  data-dir="e"></div>
+    <div class="resize-handle w"  data-dir="w"></div>
+    <div class="resize-handle ne" data-dir="ne"></div>
+    <div class="resize-handle nw" data-dir="nw"></div>
+    <div class="resize-handle se" data-dir="se"></div>
+    <div class="resize-handle sw" data-dir="sw"></div>
+</div>
+
+<!-- ════ 版本管理面板 ════ -->
+<div class="float-panel" id="panel-versions" style="left:120px;top:300px;width:460px;height:420px;">
+    <div class="panel-bar">
+        <div class="tl-wrap">
+            <div class="tl red"    onclick="closePanel('versions')"></div>
+            <div class="tl yellow" onclick="minimizePanel('versions')"></div>
+            <div class="tl green"  onclick="maximizePanel('versions')"></div>
+        </div>
+        <span class="panel-title">nmcl — 已安装版本</span>
+    </div>
+    <div class="vmgr-header">
+        <span class="vmgr-header-title">// 版本隔离 = 独立存档/资源目录</span>
+        <button class="vmgr-refresh" onclick="refreshInstalledVersions()">⟳ 刷新</button>
+    </div>
+    <div class="vmgr-list" id="vmgrList">
+        <div class="vmgr-empty" id="vmgrEmpty">正在扫描已安装版本...</div>
     </div>
     <div class="resize-handle n"  data-dir="n"></div>
     <div class="resize-handle s"  data-dir="s"></div>
@@ -943,7 +1152,9 @@ function toggleSidebar() {
 const pState = {
     play:     { maximized:false, minimized:false },
     settings: { maximized:false, minimized:false },
-    user:     { maximized:false, minimized:false }
+    user:     { maximized:false, minimized:false },
+    download: { maximized:false, minimized:false },
+    versions: { maximized:false, minimized:false }
 };
 
 function getPanel(n) { return document.getElementById('panel-' + n); }
@@ -1258,16 +1469,261 @@ function connectWS() {
                     document.getElementById('javaStatusText').innerText = '错误：' + msg.error;
                     document.getElementById('javaStatusText').style.color = 'var(--rust)';
                 }
+            } else if (msg.type === 'mc_download_progress') {
+                onMcDownloadProgress(msg.percent, msg.message);
+            } else if (msg.type === 'mc_download_finished') {
+                onMcDownloadFinished(msg.success, msg.versionId, msg.error);
             }
         } catch(e) { console.error(e); }
     };
     ws.onclose = () => setTimeout(connectWS, 2000); // Auto reconnect
 }
 
+// ══════════════════════════════════════════════
+//  DOWNLOAD PANEL
+// ══════════════════════════════════════════════
+
+let dlRemoteVersions = [];   // full list from /api/versions/remote
+let dlCurrentTab     = 'release';
+let dlActiveId       = null; // version currently downloading
+
+function setDlTab(type) {
+    dlCurrentTab = type;
+    document.querySelectorAll('.dl-tab').forEach(t => t.classList.remove('active'));
+    const el = document.getElementById('dlTab-' + type);
+    if (el) el.classList.add('active');
+    renderDlList();
+}
+
+function renderDlList() {
+    const list = document.getElementById('dlList');
+    const filtered = dlRemoteVersions.filter(v => v.type === dlCurrentTab);
+
+    if (!filtered.length) {
+        list.innerHTML = '<div class="vmgr-empty">此分类下没有版本</div>';
+        return;
+    }
+
+    list.innerHTML = filtered.map(v => {
+        const installed = isVersionInstalled(v.id);
+        const active    = (dlActiveId === v.id);
+        const btnClass  = installed ? 'dl-btn done' : 'dl-btn';
+        const btnLabel  = active ? '下载中...' : (installed ? '已安装' : '下载');
+        return `
+<div class="dl-row" id="dlrow-${v.id}">
+    <span class="dl-id">${v.id}</span>
+    <span class="dl-tag ${v.type}">${v.type}</span>
+    <button class="${btnClass}" ${(installed || active) ? 'disabled' : ''}
+            onclick="startMcDownload('${v.id}')">${btnLabel}</button>
+</div>`;
+    }).join('');
+}
+
+let installedVersionIds = new Set(); // quick lookup
+
+function isVersionInstalled(id) { return installedVersionIds.has(id); }
+
+function loadRemoteVersions() {
+    fetch('/api/versions/remote')
+        .then(r => r.json())
+        .then(data => {
+            dlRemoteVersions = data;
+            renderDlList();
+        })
+        .catch(() => {
+            document.getElementById('dlList').innerHTML =
+                '<div class="vmgr-empty" style="color:var(--rust)">网络错误，无法加载版本列表</div>';
+        });
+}
+
+function startMcDownload(verId) {
+    dlActiveId = verId;
+    renderDlList();
+
+    // Show footer
+    const footer = document.getElementById('dlFooter');
+    footer.style.display = 'block';
+    document.getElementById('dlFooterMsg').textContent  = '正在启动...';
+    document.getElementById('dlFooterPct').textContent  = '0%';
+    document.getElementById('dlFooterFill').style.width = '0%';
+    document.getElementById('dlFooterMsg').style.color  = '';
+
+    fetch('/api/download/minecraft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ versionId: verId })
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (!d.success) {
+            document.getElementById('dlFooterMsg').textContent = '错误: ' + d.message;
+            document.getElementById('dlFooterMsg').style.color = 'var(--rust)';
+            dlActiveId = null;
+            renderDlList();
+        }
+    })
+    .catch(() => {
+        document.getElementById('dlFooterMsg').textContent = '请求失败';
+        document.getElementById('dlFooterMsg').style.color = 'var(--rust)';
+        dlActiveId = null;
+        renderDlList();
+    });
+}
+
+// Called from WS handler
+function onMcDownloadProgress(pct, msg) {
+    document.getElementById('dlFooter').style.display = 'block';
+    document.getElementById('dlFooterFill').style.width = pct + '%';
+    document.getElementById('dlFooterPct').textContent  = pct + '%';
+    document.getElementById('dlFooterMsg').textContent  = msg;
+    document.getElementById('dlFooterMsg').style.color  = '';
+}
+
+function onMcDownloadFinished(success, verId, error) {
+    dlActiveId = null;
+    if (success) {
+        installedVersionIds.add(verId);
+        document.getElementById('dlFooterFill').style.width = '100%';
+        document.getElementById('dlFooterPct').textContent  = '100%';
+        document.getElementById('dlFooterMsg').textContent  = '✓ ' + verId + ' 下载完成';
+        document.getElementById('dlFooterMsg').style.color  = 'var(--lime)';
+        // Refresh installed list too
+        refreshInstalledVersions();
+    } else {
+        document.getElementById('dlFooterMsg').textContent = '失败: ' + error;
+        document.getElementById('dlFooterMsg').style.color = 'var(--rust)';
+    }
+    renderDlList();
+}
+
+// ══════════════════════════════════════════════
+//  VERSION MANAGEMENT PANEL
+// ══════════════════════════════════════════════
+
+let installedVersions = [];
+
+function formatBytes(bytes) {
+    if (bytes < 1024)         return bytes + ' B';
+    if (bytes < 1024 * 1024)  return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function refreshInstalledVersions() {
+    const list = document.getElementById('vmgrList');
+    list.innerHTML = '<div class="vmgr-empty">正在扫描...</div>';
+
+    fetch('/api/versions/installed')
+        .then(r => r.json())
+        .then(data => {
+            installedVersions = data;
+            installedVersionIds = new Set(data.map(v => v.id));
+            renderVmgrList();
+            renderDlList(); // update download buttons
+        })
+        .catch(() => {
+            document.getElementById('vmgrList').innerHTML =
+                '<div class="vmgr-empty" style="color:var(--rust)">加载失败</div>';
+        });
+}
+
+function renderVmgrList() {
+    const list  = document.getElementById('vmgrList');
+    if (!installedVersions.length) {
+        list.innerHTML = '<div class="vmgr-empty">暂无已安装版本<br><small style="opacity:.5">请先在「下载」面板获取版本</small></div>';
+        return;
+    }
+
+    list.innerHTML = installedVersions.map(v => {
+        const sizeStr = formatBytes(v.diskBytes || 0);
+        return `
+<div class="vmgr-row" id="vmgrrow-${v.id}">
+    <span class="vmgr-id" title="${v.id}">${v.id}</span>
+    <span class="dl-tag ${v.type || 'release'}" style="font-size:0.26rem">${v.type || 'release'}</span>
+    <span class="vmgr-size">${sizeStr}</span>
+    <div class="iso-wrap" title="启用后该版本将使用独立的存档、资源包、模组目录">
+        <span class="iso-label">隔离</span>
+        <div class="iso-switch ${v.isolated ? 'on' : ''}" id="isoSwitch-${v.id}"
+             onclick="toggleIsolation('${v.id}')"></div>
+    </div>
+    <button class="vmgr-play" onclick="quickLaunch('${v.id}')">▶</button>
+</div>`;
+    }).join('');
+}
+
+function toggleIsolation(verId) {
+    const sw      = document.getElementById('isoSwitch-' + verId);
+    const isNowOn = !sw.classList.contains('on');
+    sw.classList.toggle('on', isNowOn);
+
+    fetch('/api/versions/isolation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ versionId: verId, isolated: isNowOn })
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (!d.success) {
+            // Revert
+            sw.classList.toggle('on', !isNowOn);
+        } else {
+            // Update local state
+            const v = installedVersions.find(x => x.id === verId);
+            if (v) v.isolated = isNowOn;
+        }
+    })
+    .catch(() => sw.classList.toggle('on', !isNowOn));
+}
+
+function quickLaunch(verId) {
+    selectedVersion = verId;
+    const username  = document.getElementById('username').value.trim() || 'Steve';
+
+    // Show the play panel and update version display
+    if (!document.getElementById('panel-play').classList.contains('visible')) {
+        openPanel('play');
+    }
+    document.getElementById('versionDisplay').textContent = verId;
+    document.getElementById('statusMsg').textContent = '正在启动 ' + verId + '...';
+    document.getElementById('statusMsg').style.color = '';
+
+    setLoading(true);
+    fetch('/api/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            username,
+            version: verId,
+            memory: parseInt(document.getElementById('memory').value)
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('statusMsg').textContent = '启动成功！';
+            document.getElementById('statusMsg').style.color = 'var(--lime)';
+        } else if (data.error === 'no_java') {
+            document.getElementById('statusMsg').textContent = '缺少 Java 环境';
+            document.getElementById('statusMsg').style.color = 'var(--rust)';
+            requiredJavaVersion = data.requiredVersion || 8;
+            showJavaModal();
+        } else {
+            document.getElementById('statusMsg').textContent = '错误：' + data.message;
+            document.getElementById('statusMsg').style.color = 'var(--rust)';
+        }
+    })
+    .catch(() => {
+        document.getElementById('statusMsg').textContent = '连接失败';
+        document.getElementById('statusMsg').style.color = 'var(--rust)';
+    })
+    .finally(() => setLoading(false));
+}
+
 // ── Init ──
 initSlider();
 refreshCursorTargets();
 connectWS();
+loadRemoteVersions();
+refreshInstalledVersions();
 </script>
 </body>
 </html>

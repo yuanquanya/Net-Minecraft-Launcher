@@ -12,6 +12,7 @@
 #include <QPointer>
 #include <QMutex>
 #include <QReadWriteLock>
+#include <QDateTime>
 #include <vector>
 #include <string>
 
@@ -76,6 +77,31 @@ struct JavaStatus {
 };
 
 // ════════════════════════════════════════════════════════════════════════════
+// InstalledVersion – result of scanning the local versions/ directory
+// ════════════════════════════════════════════════════════════════════════════
+
+struct InstalledVersion {
+    std::string id;
+    std::string type;       // "release" | "snapshot" | "old_beta" | "old_alpha"
+    bool        isolated  = false;   // true = version has its own gameDir
+    std::string gameDir;             // custom game directory path (empty = shared)
+    int64_t     diskBytes = 0;       // approximate on-disk size
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// DownloadStatus – live state of a Minecraft version download
+// ════════════════════════════════════════════════════════════════════════════
+
+struct McDownloadStatus {
+    bool        active   = false;
+    std::string versionId;
+    int         progress = 0;
+    std::string statusMsg;
+    bool        success  = false;
+    std::string error;
+};
+
+// ════════════════════════════════════════════════════════════════════════════
 // LauncherCore
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -89,6 +115,13 @@ public:
 
     // ── Version list ─────────────────────────────────────────────────────────
     std::vector<MinecraftVersion> getVersionList();
+    // Fetches the full remote manifest from Mojang (cached 5 min).
+    std::vector<MinecraftVersion> getRemoteVersionList();
+    // Scans workDir/versions/ and returns locally available versions.
+    std::vector<InstalledVersion> getInstalledVersions() const;
+    // Toggle per-version isolation (separate gameDir inside workDir/isolated/<id>/).
+    bool setVersionIsolation(const std::string& versionId, bool isolated);
+
     int getRecommendedJavaVersion(const std::string& versionId);
 
     // ── Game launch ──────────────────────────────────────────────────────────
@@ -104,6 +137,12 @@ public:
     // ════════════════════════════════════════════════════════════════════════
 
     JavaStatus getJavaStatus() const;
+
+    // ── Minecraft version download ────────────────────────────────────────────
+    // Async 3-phase pipeline: manifest → assets+libs → client jar.
+    // Emits mcDownloadProgress / mcDownloadFinished.
+    void downloadMinecraftVersion(const std::string& versionId);
+    McDownloadStatus getDownloadStatus() const;
 
     // ── JavaSearchLoader ─────────────────────────────────────────────────────
     // Scans all well-known directories (including our own runtime/), probes
@@ -162,6 +201,10 @@ signals:
     // ── Java search signal ────────────────────────────────────────────────────
     void javaListReady(QVector<JavaEntry> entries);
 
+    // ── Minecraft download signals ────────────────────────────────────────────
+    void mcDownloadProgress(int percent, QString message);
+    void mcDownloadFinished(bool success, QString versionId, QString error);
+
     // ── Launch signals ────────────────────────────────────────────────────────
     void launchLog(QString message);
     void gameStarted();
@@ -178,6 +221,15 @@ private:
 
     JavaStatus m_javaStatus;
     mutable QMutex m_javaStatusLock;
+
+    // ── Remote version list cache ─────────────────────────────────────────────
+    mutable QMutex                m_remoteVersionsLock;
+    std::vector<MinecraftVersion> m_remoteVersionsCache;
+    QDateTime                     m_remoteVersionsCachedAt;
+
+    // ── MC download state ─────────────────────────────────────────────────────
+    McDownloadStatus m_dlStatus;
+    mutable QMutex   m_dlStatusLock;
 
     // ── Java install manifest entry ───────────────────────────────────────────
     struct JavaManifestFile {
